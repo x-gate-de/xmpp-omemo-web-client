@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} - Chat{% endblock %}
+{% block content %}
+<div class="conv-head">
+  <span class="avatar {% if is_room %}room{% endif %}" style="--h: {{ hue }}">{{ initials }}</span>
+  <span class="who">
+    <div class="name">{{ name }}</div>
+    <div class="sub">
+      {% if is_room %}Oeffentlicher Raum &middot; {{ partner }}
+      {% else %}
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Ende-zu-Ende verschluesselt &middot; {{ partner }}
+      {% endif %}
+    </div>
+  </span>
+</div>
+
+<div class="thread" id="messages" data-partner="{{ partner }}" data-last-id="{{ messages[-1].id if messages else 0 }}">
+  {% for m in messages %}
+    <div class="row {{ m.direction }}" data-id="{{ m.id }}">
+      <div class="msg">
+        {% if m.sender and m.direction == 'in' %}<span class="sender">{{ m.sender }}</span>{% endif %}
+        {% if m.decrypted %}{{ m.body }}{% else %}<span class="undec">[nicht entschluesselbar]</span>{% endif %}
+        <span class="meta">
+          <span>{{ m.ts }}</span>
+          {% if m.direction == 'out' %}
+            {% if m.status == 'delivered' %}
+              <svg class="tick delivered" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 13l4 4L13 7"/><path d="M11 13l4 4L23 7"/></svg>
+            {% else %}
+              <svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>
+            {% endif %}
+          {% endif %}
+        </span>
+      </div>
+    </div>
+  {% endfor %}
+</div>
+
+<div id="pending">
+  {% for p in pending %}
+    <div class="row out pending"><div class="msg">{{ p.body }}<span class="meta">{% if p.status == 'error' %}Fehler{% else %}wird gesendet …{% endif %}</span></div></div>
+  {% endfor %}
+</div>
+
+<div class="empty" id="empty-hint" {% if messages or pending %}style="display:none"{% endif %}>
+  <p>Noch keine Nachrichten. Schreibe die erste unten.</p>
+</div>
+
+<form class="composer" method="post" action="/c/{{ partner }}/send">
+  <input type="text" name="body" placeholder="Nachricht schreiben …" autocomplete="off" autofocus required aria-label="Nachricht">
+  <button class="icon-btn" type="submit" aria-label="Senden">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+  </button>
+</form>
+{% endblock %}
+{% block scripts %}<script src="/static/app.js"></script>{% endblock %}

@@ -1,0 +1,98 @@
+# -----------------------------------------------------------------------------
+# Skript: src/schema.py
+# Autor: Torben Belz
+# Version: 1.1.0
+# Lizenz: AGPL-3.0-or-later (siehe LICENSE)
+# Zweck:
+# - Zentrales SQLite-Schema fuer Archiv, Outbox, Read-State, Kontakte und MUC.
+#   Wird von Daemon (Schreiber) und Web-UI genutzt.
+# Betriebs- und Wartungshinweise:
+# - WAL erlaubt gleichzeitiges Lesen/Schreiben durch beide Dienste.
+# - Spaltenmigrationen sind idempotent (ADD COLUMN nur falls fehlend).
+# -----------------------------------------------------------------------------
+
+
+# Ergaenzt eine Spalte, falls sie in der Tabelle noch nicht existiert.
+def _add_column_if_missing(conn, table, column, ddl):
+    cols = [r[1] for r in conn.execute(f"PRAGMA table_info({table})").fetchall()]
+    if column not in cols:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {ddl}")
+
+
+# Legt alle Tabellen/Indizes idempotent an und aktiviert WAL + busy_timeout.
+def ensure_schema(conn):
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+
+    # Archivierte Nachrichten (1:1 entschluesselt, MUC unverschluesselt).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS messages ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  dedup_key TEXT UNIQUE,"
+        "  partner_jid TEXT NOT NULL,"        # 1:1-Partner oder Raum-JID
+        "  direction TEXT NOT NULL,"          # 'in' / 'out'
+        "  body TEXT,"
+        "  decrypted INTEGER NOT NULL,"
+        "  ts_received REAL NOT NULL,"
+        "  namespace TEXT"
+        ")"
+    )
+    # Migrationen fuer bestehende DBs.
+    _add_column_if_missing(conn, "messages", "sender", "sender TEXT")       # MUC-Nick
+    _add_column_if_missing(conn, "messages", "status", "status TEXT")       # out: sent/delivered/error
+    _add_column_if_missing(conn, "messages", "msg_id", "msg_id TEXT")       # XMPP-Message-ID (Empfangsbestaetigung)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_messages_partner_ts ON messages (partner_jid, ts_received)"
+    )
+
+    # Sendeauftraege der Web-UI; der Daemon arbeitet sie ab.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS outbox ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  recipient_jid TEXT NOT NULL,"
+        "  body TEXT NOT NULL,"
+        "  status TEXT NOT NULL DEFAULT 'pending',"
+        "  error TEXT,"
+        "  created_ts REAL NOT NULL,"
+        "  sent_ts REAL"
+        ")"
+    )
+    _add_column_if_missing(conn, "outbox", "kind", "kind TEXT NOT NULL DEFAULT 'chat'")  # chat/groupchat
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox (status, id)")
+
+    # Lesezustand je Konversation/Raum.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS read_state ("
+        "  partner_jid TEXT PRIMARY KEY,"
+        "  last_read_ts REAL NOT NULL"
+        ")"
+    )
+
+    # Roster-Kontakte (vom Daemon gepflegt) - Quelle der Userliste.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS contacts ("
+        "  jid TEXT PRIMARY KEY,"
+        "  name TEXT,"
+        "  subscription TEXT"
+        ")"
+    )
+
+    # Beigetretene MUC-Raeume (autojoin durch den Daemon).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS mucs ("
+        "  room_jid TEXT PRIMARY KEY,"
+        "  name TEXT,"
+        "  nick TEXT,"
+        "  joined INTEGER NOT NULL DEFAULT 1"
+        ")"
+    )
+
+    # Auf dem Server verfuegbare oeffentliche Raeume (vom Daemon per Disco befuellt).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS muc_available ("
+        "  room_jid TEXT PRIMARY KEY,"
+        "  name TEXT,"
+        "  updated_ts REAL"
+        ")"
+    )
+    conn.commit()

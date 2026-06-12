@@ -1,0 +1,35 @@
+# -----------------------------------------------------------------------------
+# Datei: deploy/omemo-web-ui.service
+# Autor: Torben Belz
+# Version: 1.0.0
+# Lizenz: AGPL-3.0-or-later (siehe LICENSE)
+# Zweck:
+# - systemd-Unit fuer die Web-UI (uvicorn/FastAPI), nur lesend.
+# Betriebs- und Wartungshinweise:
+# - Lauscht lokal (127.0.0.1); externer Zugriff ueber nginx-Reverse-Proxy/traefik.
+# -----------------------------------------------------------------------------
+
+[Unit]
+Description=Chat - Web-UI (Archiv, read-only)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=omemoweb
+Group=omemoweb
+WorkingDirectory=/opt/omemo-web
+Environment=OMEMO_WEB_CONFIG=/opt/omemo-web/config.yaml
+ExecStart=/opt/omemo-web/venv/bin/python /opt/omemo-web/run_web.py
+Restart=always
+RestartSec=5
+
+# Haertung
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/omemo-web /var/log/omemo-web
+
+[Install]
+WantedBy=multi-user.target

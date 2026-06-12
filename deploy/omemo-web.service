@@ -1,0 +1,36 @@
+# -----------------------------------------------------------------------------
+# Datei: deploy/omemo-web.service
+# Autor: Torben Belz
+# Version: 1.0.0
+# Lizenz: AGPL-3.0-or-later (siehe LICENSE)
+# Zweck:
+# - systemd-Unit fuer den Chat Archiv-Daemon (Dauerbetrieb).
+# Betriebs- und Wartungshinweise:
+# - Installation: nach /etc/systemd/system/ kopieren, daemon-reload, enable --now.
+# - Laeuft als unprivilegierter Systembenutzer omemoweb.
+# -----------------------------------------------------------------------------
+
+[Unit]
+Description=Chat - OMEMO Archiv-Daemon
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=omemoweb
+Group=omemoweb
+WorkingDirectory=/opt/omemo-web
+ExecStart=/opt/omemo-web/venv/bin/python /opt/omemo-web/run_daemon.py --config /opt/omemo-web/config.yaml
+Restart=always
+RestartSec=5
+
+# Haertung
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# Schreibzugriff nur auf State und Logs.
+ReadWritePaths=/var/lib/omemo-web /var/log/omemo-web
+
+[Install]
+WantedBy=multi-user.target

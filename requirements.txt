@@ -1,0 +1,32 @@
+# -----------------------------------------------------------------------------
+# Datei: requirements.txt
+# Autor: Torben Belz
+# Lizenz: AGPL-3.0-or-later (siehe LICENSE)
+# Zweck:
+# - Gepinnte Python-Abhaengigkeiten fuer Chat (Daemon + Web-UI).
+# Betriebs- und Wartungshinweise:
+# - Versionen vor produktivem Einsatz mit `pip-audit` auf Schwachstellen pruefen.
+# - Web-Framework-Versionen nach Installation auf dem Host per `pip freeze` verifizieren.
+# - Python >= 3.11 erforderlich (slixmpp 1.16).
+# -----------------------------------------------------------------------------
+
+# XMPP-Core (asyncio)
+slixmpp==1.16.0
+
+# OMEMO (XEP-0384) Plugin fuer slixmpp + Krypto-Unterbau (Syndace-Familie)
+slixmpp-omemo==2.2.0
+OMEMO==2.1.0
+twomemo==2.1.0
+oldmemo==2.1.0
+DoubleRatchet==1.3.0
+X3DH==1.3.0
+XEdDSA==1.2.0
+
+# Web-UI
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+jinja2==3.1.5
+python-multipart==0.0.32
+
+# Konfiguration
+PyYAML==6.0.2

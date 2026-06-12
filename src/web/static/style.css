@@ -1,0 +1,279 @@
+/* ---------------------------------------------------------------------------
+   Datei: src/web/static/style.css
+   Autor: Torben Belz
+   Lizenz: AGPL-3.0-or-later (siehe LICENSE)
+   Zweck: Design-System der Chat Web-UI (Messenger-Stil, hell/dunkel).
+   --------------------------------------------------------------------------- */
+
+:root {
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --on-primary: #ffffff;
+  --accent: #059669;
+  --bg: #f4f6fb;
+  --surface: #ffffff;
+  --surface-2: #eef2fb;
+  --bubble-in: #ffffff;
+  --bubble-out: #2563eb;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --border: #e3e9f5;
+  --danger: #dc2626;
+  --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 2px 8px rgba(15, 23, 42, .04);
+  --radius: 14px;
+  --radius-sm: 10px;
+  --appbar-h: 60px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #3b82f6;
+    --primary-hover: #60a5fa;
+    --on-primary: #ffffff;
+    --accent: #34d399;
+    --bg: #0b1120;
+    --surface: #111a2e;
+    --surface-2: #1b2740;
+    --bubble-in: #1b2740;
+    --bubble-out: #2563eb;
+    --fg: #e8eef9;
+    --muted: #94a3b8;
+    --border: #233149;
+    --danger: #f87171;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 10px rgba(0, 0, 0, .3);
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a { color: inherit; }
+
+/* --- App-Bar ------------------------------------------------------------- */
+.appbar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  height: var(--appbar-h);
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--border);
+}
+.appbar-inner {
+  max-width: 860px;
+  margin: 0 auto;
+  height: 100%;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-decoration: none;
+  color: var(--fg);
+}
+.brand-ic { color: var(--primary); }
+.tabs { display: flex; gap: 4px; margin-left: auto; }
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  text-decoration: none;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 500;
+  transition: background .18s ease, color .18s ease;
+}
+.tab:hover { background: var(--surface-2); color: var(--fg); }
+.tab.active { background: color-mix(in srgb, var(--primary) 14%, transparent); color: var(--primary); }
+.tab svg { flex: none; }
+.tab span { display: inline; }
+
+/* --- Layout -------------------------------------------------------------- */
+.main {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 18px 16px 28px;
+}
+.page-title { font-size: 1.05rem; font-weight: 700; margin: 4px 2px 16px; }
+.section-title { font-size: 0.8rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 22px 4px 9px; }
+
+/* --- Avatare ------------------------------------------------------------- */
+.avatar {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 600;
+  font-size: 0.95rem;
+  background: hsl(var(--h, 215) 58% 48%);
+  user-select: none;
+}
+.avatar.room { border-radius: 30%; background: hsl(var(--h, 215) 45% 42%); }
+
+/* --- Listen (Chats / Kontakte / Raeume) ---------------------------------- */
+.list { display: flex; flex-direction: column; gap: 8px; }
+.list-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 11px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  text-decoration: none;
+  color: inherit;
+  box-shadow: var(--shadow);
+  transition: transform .14s ease, border-color .14s ease, background .14s ease;
+}
+a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.row-main { min-width: 0; flex: 1; }
+.row-top { display: flex; align-items: baseline; gap: 8px; }
+.row-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-time { margin-left: auto; font-size: 0.76rem; color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+.row-sub { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
+.row-preview { color: var(--muted); font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.row-jid { color: var(--muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.pill { flex: none; min-width: 20px; height: 20px; padding: 0 7px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; display: inline-grid; place-items: center; }
+.pill.unread { background: var(--accent); color: #fff; }
+.pill.warn { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+
+/* --- Konversation -------------------------------------------------------- */
+.conv-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 2px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+.conv-head .who { min-width: 0; }
+.conv-head .name { font-weight: 700; }
+.conv-head .sub { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
+.conv-head .sub svg { width: 13px; height: 13px; color: var(--accent); }
+
+.thread { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; }
+.row { display: flex; }
+.row.out { justify-content: flex-end; }
+.msg {
+  max-width: min(78%, 540px);
+  padding: 8px 12px 6px;
+  border-radius: 16px;
+  margin: 3px 0;
+  line-height: 1.45;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+  box-shadow: var(--shadow);
+}
+.row.in .msg { background: var(--bubble-in); border: 1px solid var(--border); border-bottom-left-radius: 5px; }
+.row.out .msg { background: var(--bubble-out); color: #fff; border-bottom-right-radius: 5px; }
+.msg .sender { display: block; font-size: 0.78rem; font-weight: 700; color: var(--primary); margin-bottom: 2px; }
+.msg .undec { font-style: italic; opacity: .7; }
+.meta { display: flex; align-items: center; gap: 4px; justify-content: flex-end; margin-top: 3px; font-size: 0.68rem; }
+.row.in .meta { color: var(--muted); }
+.row.out .meta { color: rgba(255, 255, 255, .8); }
+.meta .tick { width: 15px; height: 15px; flex: none; }
+.meta .tick.delivered { color: #a7f3d0; }
+.row.pending .msg { opacity: .62; }
+
+/* --- Composer ------------------------------------------------------------ */
+.composer {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 12px 0 4px;
+  margin-top: 8px;
+  background: linear-gradient(to top, var(--bg) 72%, transparent);
+}
+.composer input[type=text] {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 16px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg);
+  font-size: 1rem;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.composer input[type=text]:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.icon-btn {
+  flex: none;
+  width: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--on-primary);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  transition: background .15s ease, transform .1s ease;
+}
+.icon-btn:hover { background: var(--primary-hover); }
+.icon-btn:active { transform: scale(.94); }
+
+/* --- Buttons / Formulare ------------------------------------------------- */
+.newconv { display: flex; gap: 9px; margin-bottom: 16px; }
+.newconv input[type=text] {
+  flex: 1; min-width: 0; padding: 11px 15px; border: 1px solid var(--border);
+  border-radius: 999px; background: var(--surface); color: var(--fg); font-size: 0.95rem; outline: none;
+}
+.newconv input[type=text]:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; padding: 9px 16px; border: 0;
+  border-radius: 999px; background: var(--primary); color: var(--on-primary);
+  font-size: 0.9rem; font-weight: 600; cursor: pointer; text-decoration: none;
+  transition: background .15s ease;
+}
+.btn:hover { background: var(--primary-hover); }
+.btn.ghost { background: var(--surface-2); color: var(--fg); }
+.btn.ghost:hover { background: color-mix(in srgb, var(--primary) 14%, var(--surface-2)); }
+.tag-joined { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 0.82rem; font-weight: 600; }
+.tag-joined svg { width: 15px; height: 15px; }
+
+/* --- Empty State --------------------------------------------------------- */
+.empty { text-align: center; color: var(--muted); padding: 56px 20px; }
+.empty svg { width: 44px; height: 44px; color: var(--border); margin-bottom: 12px; }
+.empty p { margin: 0; }
+
+/* --- Fokus & Motion ------------------------------------------------------ */
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+
+@media (max-width: 480px) {
+  .tab span { display: none; }
+  .tab { padding: 9px; }
+  .msg { max-width: 84%; }
+}

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Kontakte - Chat{% endblock %}
+{% block content %}
+<div class="page-title">Kontakte</div>
+{% if not items %}
+  <div class="empty"><p>Noch keine Kontakte im Roster.</p></div>
+{% else %}
+  <div class="list">
+    {% for it in items %}
+      <a class="list-row" href="/c/{{ it.jid }}">
+        <span class="avatar" style="--h: {{ it.hue }}">{{ it.initials }}</span>
+        <span class="row-main">
+          <span class="row-name">{{ it.name }}</span>
+          <span class="row-sub"><span class="row-jid">{{ it.jid }}</span></span>
+        </span>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/app.js"></script>{% endblock %}
