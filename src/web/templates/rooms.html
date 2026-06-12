@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Raeume - Chat{% endblock %}
+{% block content %}
+<div class="page-title">Oeffentliche Raeume</div>
+
+{% if joined %}
+  <div class="section-title">Beigetreten</div>
+  <div class="list">
+    {% for r in joined %}
+      <a class="list-row" href="/c/{{ r.jid }}">
+        <span class="avatar room" style="--h: {{ r.hue }}">{{ r.initials }}</span>
+        <span class="row-main">
+          <span class="row-name">{{ r.name }}</span>
+          <span class="row-sub"><span class="row-jid">{{ r.jid }}</span></span>
+        </span>
+        <span class="tag-joined">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+        </span>
+      </a>
+    {% endfor %}
+  </div>
+{% endif %}
+
+<div class="section-title">Verfuegbar</div>
+{% if not available %}
+  <div class="empty"><p>Keine Raeume gefunden (Discovery laeuft ggf. noch).</p></div>
+{% else %}
+  <div class="list">
+    {% for r in available %}
+      <div class="list-row">
+        <span class="avatar room" style="--h: {{ r.hue }}">{{ r.initials }}</span>
+        <span class="row-main">
+          <span class="row-name">{{ r.name }}</span>
+          <span class="row-sub"><span class="row-jid">{{ r.jid }}</span></span>
+        </span>
+        {% if r.joined %}
+          <span class="tag-joined">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>
+            beigetreten
+          </span>
+        {% else %}
+          <form method="post" action="/rooms/join" style="margin:0">
+            <input type="hidden" name="room_jid" value="{{ r.jid }}">
+            <button class="btn ghost" type="submit">Beitreten</button>
+          </form>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+{% endblock %}

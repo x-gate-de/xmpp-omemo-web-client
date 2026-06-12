@@ -1,0 +1,18 @@
+venv/
+__pycache__/
+*.pyc
+*.swp
+*.swo
+*~
+*.log
+config.yaml
+config.json
+.env
+
+# Laufzeit- und Zustandsdaten des Daemons (enthalten Klartext und OMEMO-Schluessel!)
+*.sqlite
+*.sqlite3
+*.db
+data/
+state/
+omemo_state/

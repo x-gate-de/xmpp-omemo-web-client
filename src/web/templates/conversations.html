@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block content %}
+<form class="newconv" method="post" action="/new">
+  <input type="text" name="partner" placeholder="Neuer Chat: jid@example.com" required aria-label="Neue Konversation">
+  <button class="btn" type="submit">Oeffnen</button>
+</form>
+
+<div class="list" id="conv-list">
+  {% for it in items %}
+    <a class="list-row" href="/c/{{ it.partner }}">
+      <span class="avatar {% if it.is_room %}room{% endif %}" style="--h: {{ it.hue }}">{{ it.initials }}</span>
+      <span class="row-main">
+        <span class="row-top">
+          <span class="row-name">{{ it.name }}</span>
+          <span class="row-time">{{ it.last }}</span>
+        </span>
+        <span class="row-sub">
+          <span class="row-preview">{{ it.preview }}</span>
+          {% if it.unread %}<span class="pill unread">{{ it.unread }}</span>{% endif %}
+          {% if it.undecrypted %}<span class="pill warn">{{ it.undecrypted }}</span>{% endif %}
+        </span>
+      </span>
+    </a>
+  {% endfor %}
+</div>
+
+<div class="empty" id="empty-hint" {% if items %}style="display:none"{% endif %}>
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  <p>Noch keine Nachrichten. Starte oben einen Chat oder waehle einen Kontakt.</p>
+</div>
+{% endblock %}
+{% block scripts %}<script src="/static/app.js"></script>{% endblock %}
