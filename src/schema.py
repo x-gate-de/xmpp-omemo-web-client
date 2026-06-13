@@ -68,6 +68,24 @@ def ensure_schema(conn):
         ")"
     )
 
+    # Anfragen der Web-UI, aeltere Nachrichten per MAM (XEP-0313) nachzuladen.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS mam_requests ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  target_jid TEXT NOT NULL,"
+        "  kind TEXT NOT NULL,"              # 'chat' (1:1) oder 'muc' (Raum)
+        "  status TEXT NOT NULL DEFAULT 'pending',"  # pending / done / error
+        "  created_ts REAL NOT NULL"
+        ")"
+    )
+    # Paginierungs-Stand je Ziel: Beginn des zuletzt geladenen Zeitfensters.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS mam_state ("
+        "  target_jid TEXT PRIMARY KEY,"
+        "  oldest_ts REAL"
+        ")"
+    )
+
     # Roster-Kontakte (vom Daemon gepflegt) - Quelle der Userliste.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS contacts ("

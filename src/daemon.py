@@ -19,8 +19,10 @@
 # -----------------------------------------------------------------------------
 
 import asyncio
+import datetime
 import logging
 import sys
+import time
 
 from slixmpp import ClientXMPP, JID
 from slixmpp.plugins import register_plugin
@@ -95,6 +97,7 @@ class ArchiverBot(ClientXMPP):
         self.register_plugin("xep_0334")  # Message Processing Hints
         self.register_plugin("xep_0045")  # Multi-User Chat
         self.register_plugin("xep_0184")  # Empfangsbestaetigungen
+        self.register_plugin("xep_0313")  # Message Archive Management (MAM)
         self.register_plugin(
             "xep_0384",
             {"state_db_path": config["omemo"]["state_path"]},
@@ -260,6 +263,9 @@ class ArchiverBot(ClientXMPP):
                         await self._send_groupchat(outbox_id, recipient, body)
                     else:
                         await self._send_chat(outbox_id, recipient, body)
+                # Anfragen, aeltere Nachrichten per MAM nachzuladen, abarbeiten.
+                for req_id, target, kind in self._archive.claim_pending_mam():
+                    await self._backfill(req_id, target, kind)
             except Exception as e:
                 logger.error("Outbox-Verarbeitung fehlgeschlagen: %s", type(e).__name__)
             await asyncio.sleep(2)
@@ -282,7 +288,8 @@ class ArchiverBot(ClientXMPP):
             encrypted["id"] = msg_id
             encrypted["request_receipt"] = True
             encrypted.send()
-            self._archive.store(recipient, "out", body, f"out-{outbox_id}",
+            # stanza_id = echte Message-ID, damit ein spaeteres MAM-Ergebnis dedupliziert.
+            self._archive.store(recipient, "out", body, msg_id,
                                 decrypted=True, namespace="send", status="sent", msg_id=msg_id)
             self._archive.mark_outbox_sent(outbox_id)
             logger.info("Gesendet (1:1) an %s", recipient)
@@ -302,6 +309,81 @@ class ArchiverBot(ClientXMPP):
         except Exception as e:
             logger.warning("Senden (Gruppe) an %s fehlgeschlagen: %s", room, type(e).__name__)
             self._archive.mark_outbox_error(outbox_id, type(e).__name__)
+
+    # --- MAM: aeltere Nachrichten nachladen ---------------------------------
+
+    # Laedt ein 30-Tage-Fenster vor dem bisher aeltesten Stand des Ziels nach.
+    async def _backfill(self, req_id, target, kind):
+        try:
+            oldest = self._archive.mam_oldest(target)
+            if oldest is None:
+                oldest = self._archive.oldest_message_ts(target) or time.time()
+            end_dt = datetime.datetime.fromtimestamp(oldest, datetime.timezone.utc)
+            start_dt = end_dt - datetime.timedelta(days=30)
+            mam = self["xep_0313"]
+            if kind == "muc":
+                # MUC-Archiv des Raums (unverschluesselt -> voll lesbar).
+                iterator = mam.iterate(jid=JID(target), start=start_dt, end=end_dt)
+            else:
+                # Eigenes Archiv, gefiltert auf den Gespraechspartner.
+                iterator = mam.iterate(with_jid=JID(target), start=start_dt, end=end_dt)
+            count = 0
+            async for result_msg in iterator:
+                try:
+                    if await self._archive_mam_result(result_msg, target, kind):
+                        count += 1
+                except Exception:
+                    continue
+            self._archive.set_mam_oldest(target, start_dt.timestamp())
+            self._archive.mark_mam_done(req_id, True)
+            logger.info("MAM-Backfill %s (%s): %d neue Nachrichten", target, kind, count)
+        except Exception as e:
+            logger.warning("MAM-Backfill %s fehlgeschlagen: %s", target, type(e).__name__)
+            self._archive.mark_mam_done(req_id, False)
+
+    # Verarbeitet ein einzelnes MAM-Ergebnis; Rueckgabe True wenn neu archiviert.
+    async def _archive_mam_result(self, result_msg, target, kind):
+        result = result_msg["mam_result"]
+        forwarded = result["forwarded"]
+        inner = forwarded["stanza"]
+        ts = None
+        try:
+            stamp = forwarded["delay"]["stamp"]
+            if stamp:
+                ts = stamp.timestamp()
+        except Exception:
+            ts = None
+        stanza_id = inner["id"] or result["id"] or ""
+
+        if kind == "muc":
+            nick = inner["from"].resource
+            body = inner["body"]
+            if not body or not nick:
+                return False
+            direction = "out" if nick == self._muc_nick else "in"
+            return self._archive.store(target, direction, body, stanza_id, decrypted=True, sender=nick, ts=ts)
+
+        # 1:1
+        direction = "out" if inner["from"].bare == self._own_bare else "in"
+        # Dedup VOR der Entschluesselung: bereits archivierte Nachrichten nicht erneut
+        # OMEMO-entschluesseln (wuerde den Double-Ratchet-Zustand stoeren).
+        if self._archive.has(target, direction, "", stanza_id):
+            return False
+        namespaces = self["xep_0384"].is_encrypted(inner)
+        if namespaces:
+            ns = next(iter(namespaces))
+            try:
+                decrypted, _info = await self["xep_0384"].decrypt_message(inner)
+                return self._archive.store(target, direction, decrypted["body"] or "", stanza_id,
+                                           decrypted=True, namespace=ns, ts=ts)
+            except Exception:
+                # Vor unserer Geraete-Existenz gesendet / Schluessel weg -> unlesbar.
+                return self._archive.store(target, direction, None, stanza_id,
+                                           decrypted=False, namespace=ns, ts=ts)
+        body = inner["body"]
+        if not body:
+            return False
+        return self._archive.store(target, direction, body, stanza_id, decrypted=True, ts=ts)
 
 
 # Baut den Daemon aus der Konfiguration und liefert die laufbereite Instanz.

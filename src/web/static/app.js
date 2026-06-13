@@ -41,6 +41,7 @@
   function renderMessage(m) {
     var row = el("div", "row " + (m.direction === "out" ? "out" : "in"));
     row.setAttribute("data-id", m.id);
+    row.setAttribute("data-ts", m.ts || "");
     var bubble = el("div", "msg");
     if (m.sender && m.direction === "in") bubble.appendChild(el("span", "sender", m.sender));
     if (m.decrypted) bubble.appendChild(document.createTextNode(m.body || ""));
@@ -74,8 +75,18 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
         if (!data) return;
+        var msgs = data.messages || [];
+        // MAM-Backfill landet als Nachricht mit alter Zeit -> Seite neu laden,
+        // damit alles korrekt chronologisch einsortiert wird.
+        if (msgs.length) {
+          var kids = box.children;
+          var lastTs = kids.length ? kids[kids.length - 1].getAttribute("data-ts") : "";
+          for (var k = 0; k < msgs.length; k++) {
+            if (lastTs && msgs[k].ts && msgs[k].ts < lastTs) { window.location.reload(); return; }
+          }
+        }
         var stick = nearBottom();
-        (data.messages || []).forEach(function (m) {
+        msgs.forEach(function (m) {
           box.appendChild(renderMessage(m));
           if (m.id > lastId) lastId = m.id;
         });
