@@ -208,12 +208,15 @@ def _is_room(conn, jid):
     return row is not None
 
 
-def _messages(db_path, partner, after_id=0):
+def _messages(db_path, partner, after_id=0, order="id"):
+    # order="ts": chronologisch (fuer die Vollansicht, damit MAM-Nachladungen an der
+    # richtigen Stelle einsortiert werden). order="id": inkrementell (neue Nachrichten).
+    order_sql = "ts_received ASC, id ASC" if order == "ts" else "id ASC"
     conn = _open_ro(db_path)
     try:
         rows = conn.execute(
             "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
-            "WHERE partner_jid = ? AND id > ? ORDER BY id ASC",
+            "WHERE partner_jid = ? AND id > ? ORDER BY " + order_sql,
             (partner, after_id),
         ).fetchall()
     finally:
@@ -365,10 +368,11 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
     finally:
         conn.close()
     name = (room_name if is_room else contact_name) or partner
-    messages = _messages(db_path, partner)
+    messages = _messages(db_path, partner, order="ts")  # chronologisch (inkl. MAM-Nachladungen)
+    max_id = max((m["id"] for m in messages), default=0)
     _mark_read(db_path, partner)
     return _env.get_template("conversation.html").render(
-        partner=partner, name=name, messages=messages, pending=_pending(db_path, partner),
+        partner=partner, name=name, messages=messages, max_id=max_id, pending=_pending(db_path, partner),
         is_room=is_room, initials=_initials(name if name != partner else "", partner),
         hue=_hue(partner), nav_active="archiv", account_jid=acc["jid"],
         account_state=_account_state(acc["jid"]),
@@ -398,6 +402,22 @@ def send_message(partner: str, body: str = Form(...), acc: dict = Depends(requir
             conn.commit()
         finally:
             conn.close()
+    return RedirectResponse(url=f"/c/{partner}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# Fordert das Nachladen aelterer Nachrichten (MAM) fuer diese Konversation/diesen Raum an.
+@app.post("/c/{partner:path}/loadmore")
+def load_more(partner: str, acc: dict = Depends(require_account)):
+    conn = _open_rw(acc["archive_path"])
+    try:
+        kind = "muc" if _is_room(conn, partner) else "chat"
+        conn.execute(
+            "INSERT INTO mam_requests (target_jid, kind, status, created_ts) VALUES (?, ?, 'pending', ?)",
+            (partner, kind, time.time()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
     return RedirectResponse(url=f"/c/{partner}", status_code=status.HTTP_303_SEE_OTHER)
 
 

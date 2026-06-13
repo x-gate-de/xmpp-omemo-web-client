@@ -15,9 +15,13 @@
   </span>
 </div>
 
-<div class="thread" id="messages" data-partner="{{ partner }}" data-last-id="{{ messages[-1].id if messages else 0 }}">
+<form class="loadmore" method="post" action="/c/{{ partner }}/loadmore">
+  <button type="submit" class="btn ghost">Aeltere Nachrichten vom Server laden</button>
+</form>
+
+<div class="thread" id="messages" data-partner="{{ partner }}" data-last-id="{{ max_id }}">
   {% for m in messages %}
-    <div class="row {{ m.direction }}" data-id="{{ m.id }}">
+    <div class="row {{ m.direction }}" data-id="{{ m.id }}" data-ts="{{ m.ts }}">
       <div class="msg">
         {% if m.sender and m.direction == 'in' %}<span class="sender">{{ m.sender }}</span>{% endif %}
         {% if m.decrypted %}{{ m.body }}{% else %}<span class="undec">[nicht entschluesselbar]</span>{% endif %}

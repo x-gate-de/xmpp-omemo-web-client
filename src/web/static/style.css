@@ -193,6 +193,8 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .conv-head .name { font-weight: 700; }
 .conv-head .sub { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .conv-head .sub svg { width: 13px; height: 13px; color: var(--accent); }
+.loadmore { text-align: center; margin-bottom: 12px; }
+.loadmore .btn { font-size: 0.84rem; }
 
 .thread { display: flex; flex-direction: column; gap: 2px; padding-bottom: 12px; }
 .row { display: flex; }
