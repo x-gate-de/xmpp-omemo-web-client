@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- Relative time in the chat list: a relative label ("just now", "X min ago",
+  "X h ago", "yesterday", "X days ago") is shown before the absolute timestamp
+  of the last message. Computed client-side from `last_ts` and kept current by
+  the periodic list re-render.
 - Minimize conversation tiles: a minimize button moves an unused tile into a
   compact "minimized" tray at the end of the list; its content is preserved.
   Click the chip to reopen. A new incoming message (detected via `last_ts`)

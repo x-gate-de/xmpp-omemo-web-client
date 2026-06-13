@@ -172,6 +172,10 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .row-top { display: flex; align-items: baseline; gap: 8px; }
 .row-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-time { margin-left: auto; font-size: 0.76rem; color: var(--muted); flex: none; font-variant-numeric: tabular-nums; }
+/* Relative Zeit ("vor 5 Min") vor dem absoluten Zeitstempel; uebernimmt die rechte
+   Ausrichtung, der absolute Zeitstempel rueckt dann dicht dahinter. */
+.row-rel { margin-left: auto; font-size: 0.74rem; font-weight: 600; color: var(--accent); flex: none; white-space: nowrap; }
+.row-rel + .row-time { margin-left: 8px; }
 .row-sub { display: flex; align-items: center; gap: 8px; margin-top: 2px; }
 .row-preview { color: var(--muted); font-size: 0.86rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
 .row-jid { color: var(--muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
