@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- Minimize conversation tiles: a minimize button moves an unused tile into a
+  compact "minimized" tray at the end of the list; its content is preserved.
+  Click the chip to reopen. A new incoming message (detected via `last_ts`)
+  re-expands the tile automatically. The selection is stored per browser in
+  localStorage.
 - Optional: file attachments (OMEMO media, XEP-0454).
 - Optional: MAM backfill to cover daemon downtime.
 - Optional: account deletion (remove stored credentials + archive).
