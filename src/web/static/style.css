@@ -198,7 +198,7 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .row { display: flex; }
 .row.out { justify-content: flex-end; }
 .msg {
-  max-width: min(78%, 540px);
+  max-width: min(82%, 680px);
   padding: 8px 12px 6px;
   border-radius: 16px;
   margin: 3px 0;
@@ -333,9 +333,11 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
 
-/* Raster nutzt die volle Fensterbreite (Inhalt + App-Bar). */
-:root[data-view="grid"] .main { max-width: none; }
+/* Raster: nur die Listen nutzen die volle Fensterbreite (Inhalt + App-Bar). */
+:root[data-view="grid"] .main:has(.list) { max-width: none; }
 :root[data-view="grid"] .appbar-inner { max-width: none; }
+/* Geoeffneter Chat: angenehm breite, zentrierte Spalte (unabhaengig vom Modus). */
+.main:has(.thread) { max-width: 1000px; }
 
 /* --- Kachel mit letzten Zeilen (nur Raster, nur Chats) ------------------ */
 .conv-recent { display: none; }
@@ -350,6 +352,27 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 }
 .conv-recent .cr-line { flex: 0 0 auto; line-height: 1.5; color: var(--muted); overflow-wrap: anywhere; }
 .conv-recent .cr-line.out { color: color-mix(in srgb, var(--fg) 55%, var(--muted)); }
+
+/* --- Konversations-Kachel mit eigenem Antwortfeld ----------------------- */
+.conv-tile { flex-direction: column; align-items: stretch; }
+.conv-open { display: flex; align-items: center; gap: 13px; min-width: 0; flex: 1; text-decoration: none; color: inherit; }
+.conv-tile:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.conv-open:hover .row-name { color: var(--primary); }
+.tile-compose { display: none; }
+:root[data-view="grid"] #conv-list .conv-open { align-items: flex-start; }
+:root[data-view="grid"] #conv-list .tile-compose {
+  display: flex; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border);
+}
+.tile-compose input {
+  flex: 1; min-width: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg); color: var(--fg); font-size: 0.86rem; outline: none;
+}
+.tile-compose input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 20%, transparent); }
+.tile-compose button {
+  flex: none; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--primary);
+  color: var(--on-primary); display: grid; place-items: center; cursor: pointer; transition: background .15s ease;
+}
+.tile-compose button:hover { background: var(--primary-hover); }
 :root[data-lines="3"] { --conv-lines: 3; }
 :root[data-lines="4"] { --conv-lines: 4; }
 :root[data-lines="6"] { --conv-lines: 6; }

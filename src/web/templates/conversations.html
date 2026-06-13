@@ -7,23 +7,31 @@
 
 <div class="list" id="conv-list">
   {% for it in items %}
-    <a class="list-row {% if it.unread %}has-unread{% endif %}" href="/c/{{ it.partner }}">
-      <span class="avatar {% if it.is_room %}room{% endif %}" style="--h: {{ it.hue }}">{{ it.initials }}</span>
-      <span class="row-main">
-        <span class="row-top">
-          <span class="row-name">{{ it.name }}</span>
-          <span class="row-time">{{ it.last }}</span>
+    <div class="list-row conv-tile {% if it.unread %}has-unread{% endif %}">
+      <a class="conv-open" href="/c/{{ it.partner }}">
+        <span class="avatar {% if it.is_room %}room{% endif %}" style="--h: {{ it.hue }}">{{ it.initials }}</span>
+        <span class="row-main">
+          <span class="row-top">
+            <span class="row-name">{{ it.name }}</span>
+            <span class="row-time">{{ it.last }}</span>
+          </span>
+          <span class="row-sub">
+            <span class="row-preview">{{ it.preview }}</span>
+            {% if it.unread %}<span class="pill unread">{{ it.unread }}</span>{% endif %}
+            {% if it.undecrypted %}<span class="pill warn">{{ it.undecrypted }}</span>{% endif %}
+          </span>
+          <span class="conv-recent">
+            {% for m in it.recent %}<span class="cr-line {{ m.direction }}">{{ m.text }}</span>{% endfor %}
+          </span>
         </span>
-        <span class="row-sub">
-          <span class="row-preview">{{ it.preview }}</span>
-          {% if it.unread %}<span class="pill unread">{{ it.unread }}</span>{% endif %}
-          {% if it.undecrypted %}<span class="pill warn">{{ it.undecrypted }}</span>{% endif %}
-        </span>
-        <span class="conv-recent">
-          {% for m in it.recent %}<span class="cr-line {{ m.direction }}">{{ m.text }}</span>{% endfor %}
-        </span>
-      </span>
-    </a>
+      </a>
+      <form class="tile-compose" method="post" action="/c/{{ it.partner }}/send">
+        <input type="text" name="body" placeholder="Antwort …" autocomplete="off" aria-label="Antwort an {{ it.name }}">
+        <button type="submit" aria-label="Senden">
+          <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </form>
+    </div>
   {% endfor %}
 </div>
 
