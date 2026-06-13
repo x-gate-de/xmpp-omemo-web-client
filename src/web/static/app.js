@@ -44,8 +44,20 @@
     row.setAttribute("data-ts", m.ts || "");
     var bubble = el("div", "msg");
     if (m.sender && m.direction === "in") bubble.appendChild(el("span", "sender", m.sender));
-    if (m.decrypted) bubble.appendChild(document.createTextNode(m.body || ""));
-    else bubble.appendChild(el("span", "undec", "[nicht entschluesselbar]"));
+    if (m.decrypted) {
+      if (m.quote) bubble.appendChild(el("div", "msg-quote", m.quote));
+      bubble.appendChild(el("div", "msg-text", m.text || ""));
+    } else {
+      bubble.appendChild(el("span", "undec", "[nicht entschluesselbar]"));
+    }
+    if (m.decrypted && m.text) {
+      var rb = document.createElement("button");
+      rb.type = "button"; rb.className = "reply-btn"; rb.title = "Antworten"; rb.setAttribute("aria-label", "Antworten");
+      rb.setAttribute("data-quote", m.text);
+      rb.setAttribute("data-who", m.sender ? m.sender : (m.direction === "out" ? "Du" : (window.__convName || "")));
+      rb.appendChild(icon(REPLY_ICON));
+      bubble.appendChild(rb);
+    }
     var meta = el("div", "meta");
     meta.appendChild(el("span", null, m.ts));
     if (m.direction === "out") meta.appendChild(icon(m.status === "delivered" ? TICK2 : TICK));
@@ -69,6 +81,7 @@
   }
 
   var SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
+  var REPLY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
   function renderConvRow(it) {
     var tile = el("div", "list-row conv-tile" + (it.unread ? " has-unread" : ""));
     var a = el("a", "conv-open"); a.href = "/c/" + it.partner;
@@ -251,6 +264,28 @@
     }
     window.scrollTo(0, document.body.scrollHeight);
     setInterval(pollConversation, 3000);
+
+    // --- Antworten auf eine bestimmte Nachricht (Zitat) ---
+    window.__convName = (document.querySelector(".conv-head .name") || {}).textContent || "";
+    box.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".reply-btn") : null;
+      if (!btn) return;
+      e.preventDefault();
+      var quote = btn.getAttribute("data-quote") || "";
+      var who = btn.getAttribute("data-who") || "";
+      var qi = document.getElementById("reply-quote");
+      var pv = document.getElementById("reply-preview");
+      if (qi) qi.value = quote;
+      var w = document.getElementById("reply-who"); if (w) w.textContent = "Antwort an " + who;
+      var t = document.getElementById("reply-text"); if (t) t.textContent = quote.length > 120 ? quote.slice(0, 120) + "…" : quote;
+      if (pv) pv.hidden = false;
+      var ci = document.querySelector(".composer input[name=body]"); if (ci) ci.focus();
+    });
+    var replyCancel = document.getElementById("reply-cancel");
+    if (replyCancel) replyCancel.addEventListener("click", function () {
+      var qi = document.getElementById("reply-quote"); if (qi) qi.value = "";
+      var pv = document.getElementById("reply-preview"); if (pv) pv.hidden = true;
+    });
 
     // --- Paginierung: aeltere Nachrichten nachladen (lokal, dann per MAM) ---
     var older = document.getElementById("loadolder");

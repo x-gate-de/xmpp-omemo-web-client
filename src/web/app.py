@@ -265,8 +265,24 @@ def _is_room(conn, jid):
     return row is not None
 
 
+# Trennt fuehrende Zitatzeilen (">") vom eigentlichen Text (Antwort-Funktion).
+def _split_quote(body):
+    if not body:
+        return None, body
+    lines = body.split("\n")
+    i, qlines = 0, []
+    while i < len(lines) and lines[i].startswith(">"):
+        qlines.append(lines[i][1:].lstrip())
+        i += 1
+    if not qlines:
+        return None, body
+    return "\n".join(qlines), "\n".join(lines[i:]).lstrip("\n")
+
+
 def _msg_dict(r):
+    quote, text = _split_quote(r["body"])
     return {"id": r["id"], "direction": r["direction"], "body": r["body"],
+            "quote": quote, "text": text,
             "decrypted": bool(r["decrypted"]), "ts": _fmt_ts(r["ts_received"]),
             "ts_raw": r["ts_received"], "sender": r["sender"], "status": r["status"]}
 
@@ -490,8 +506,12 @@ def api_messages(partner: str, after_id: int = 0, acc: dict = Depends(require_ac
 
 
 @app.post("/c/{partner:path}/send")
-def send_message(partner: str, body: str = Form(...), acc: dict = Depends(require_account)):
+def send_message(partner: str, body: str = Form(...), quote: str = Form(""), acc: dict = Depends(require_account)):
     text = (body or "").strip()
+    quote = (quote or "").strip()
+    if text and quote:
+        # Zitat als "> "-Zeilen voranstellen (von jedem Client verstanden).
+        text = "\n".join("> " + ln for ln in quote.split("\n")) + "\n" + text
     if text:
         conn = _open_rw(acc["archive_path"])
         try:
