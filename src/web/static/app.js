@@ -1,12 +1,13 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.3.0
+// Version: 1.4.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
 // - Minimieren/Wiederoeffnen von Konversationskacheln (lokal gespeichert);
 //   eine neue Nachricht klappt eine minimierte Kachel automatisch wieder auf.
+// - Relative Zeitangabe ("vor X Min") vor dem Zeitstempel der letzten Nachricht.
 // Hinweis:
 // - Nutzerinhalte werden ueber textContent eingefuegt (XSS-Schutz). SVG-Icons
 //   stammen aus statischen Markup-Konstanten, nicht aus Nutzerdaten.
@@ -56,6 +57,19 @@
   function expandConv(partner) {
     var m = getCollapsed(); delete m[partner]; setCollapsed(m);
     if (listRefresh) listRefresh();
+  }
+
+  // Relative Zeitangabe ("vor 5 Min") aus epoch-Sekunden (last_ts). Bleibt aktuell,
+  // weil die Konversationsliste regelmaessig neu gerendert wird.
+  function relTime(ts) {
+    if (!ts) return "";
+    var s = Math.floor(Date.now() / 1000 - ts);
+    if (s < 0) s = 0;
+    if (s < 45) return "gerade eben";
+    if (s < 3600) { var m = Math.round(s / 60); return "vor " + (m || 1) + " Min"; }
+    if (s < 86400) return "vor " + Math.round(s / 3600) + " Std";
+    if (s < 172800) return "gestern";
+    return "vor " + Math.round(s / 86400) + " Tagen";
   }
 
   // Archivierte Nachrichtenblase.
@@ -124,6 +138,8 @@
     var main = el("span", "row-main");
     var top = el("span", "row-top");
     top.appendChild(el("span", "row-name", it.name));
+    var rel = relTime(it.last_ts);
+    if (rel) top.appendChild(el("span", "row-rel", rel));
     top.appendChild(el("span", "row-time", it.last));
     var sub = el("span", "row-sub");
     sub.appendChild(el("span", "row-preview", it.preview));
