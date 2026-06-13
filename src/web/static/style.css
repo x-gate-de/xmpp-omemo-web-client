@@ -454,17 +454,35 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 :root[data-lines="6"] { --conv-lines: 6; }
 :root[data-lines="8"] { --conv-lines: 8; }
 
-/* --- Minimieren / Wiederoeffnen von Kacheln ----------------------------- */
-.tile-min {
-  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
-  border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
-  color: var(--muted); display: grid; place-items: center; cursor: pointer; opacity: 0;
-  transition: opacity .14s ease, color .14s ease, border-color .14s ease, background .14s ease;
+/* --- Kachel-Aktionen: Minimieren / Schliessen --------------------------- */
+.tile-actions {
+  position: absolute; top: 8px; right: 8px; display: flex; gap: 6px; opacity: 0;
+  transition: opacity .14s ease;
 }
-.conv-tile:hover .tile-min, .tile-min:focus-visible { opacity: 1; }
-.tile-min:hover { color: var(--fg); border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); background: var(--bg); }
-/* Auf Touch-Geraeten (kein Hover) den Knopf dauerhaft sichtbar halten. */
-@media (hover: none) { .tile-min { opacity: .65; } }
+.tile-act {
+  width: 26px; height: 26px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--surface); color: var(--muted); display: grid; place-items: center;
+  cursor: pointer; transition: color .14s ease, border-color .14s ease, background .14s ease;
+}
+.conv-tile:hover .tile-actions, .tile-actions:focus-within { opacity: 1; }
+.tile-act:hover { color: var(--fg); border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); background: var(--bg); }
+.tile-close:hover { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, var(--border)); }
+/* Auf Touch-Geraeten (kein Hover) die Knoepfe dauerhaft sichtbar halten. */
+@media (hover: none) { .tile-actions { opacity: .65; } }
+
+/* --- Geschlossene Chats (eingeklappter Bereich am Listenende) ----------- */
+.closed-section { margin-top: 4px; }
+:root[data-view="grid"] .closed-section { grid-column: 1 / -1; }
+.closed-section > summary {
+  cursor: pointer; list-style: none; padding: 8px 12px; border-radius: var(--radius);
+  font-size: 0.8rem; font-weight: 600; color: var(--muted); user-select: none;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.closed-section > summary::-webkit-details-marker { display: none; }
+.closed-section > summary::before { content: "\203A"; font-size: 1.1em; line-height: 1; transition: transform .14s ease; }
+.closed-section[open] > summary::before { transform: rotate(90deg); }
+.closed-section > summary:hover { color: var(--fg); }
+.closed-section .tray-chips { margin-top: 8px; padding: 0 4px 4px; }
 
 .collapsed-tray {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
