@@ -147,8 +147,8 @@
   var listRefresh = null;
 
   // Design-Umschalter (Modus, Akzentfarbe, Ansicht, Spalten, Sortierung): sofort anwenden + merken.
-  var DESIGN_KEYS = ["theme", "accent", "view", "cols", "sort"];
-  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto", sort: "activity" };
+  var DESIGN_KEYS = ["theme", "accent", "view", "cols", "sort", "lines"];
+  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto", sort: "activity", lines: "4" };
   function applyDesign(key, val) {
     document.documentElement.setAttribute("data-" + key, val);
     try { localStorage.setItem(key, val); } catch (e) {}
