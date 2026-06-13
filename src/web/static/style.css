@@ -14,7 +14,7 @@
   --surface: #ffffff;
   --surface-2: #eef2fb;
   --bubble-in: #ffffff;
-  --bubble-out: #2563eb;
+  --bubble-out: var(--primary);
   --fg: #0f172a;
   --muted: #64748b;
   --border: #e3e9f5;
@@ -25,17 +25,27 @@
   --appbar-h: 60px;
 }
 
+/* Dunkle Tokens. --primary bleibt der Akzentfarbe ueberlassen (kein Konflikt). */
+:root[data-theme="dark"] {
+  --accent: #34d399;
+  --bg: #0b1120;
+  --surface: #111a2e;
+  --surface-2: #1b2740;
+  --bubble-in: #1b2740;
+  --fg: #e8eef9;
+  --muted: #94a3b8;
+  --border: #233149;
+  --danger: #f87171;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 10px rgba(0, 0, 0, .3);
+}
+/* Auto: dem Betriebssystem folgen, ausser bei explizit hell gewaehltem Modus. */
 @media (prefers-color-scheme: dark) {
-  :root {
-    --primary: #3b82f6;
-    --primary-hover: #60a5fa;
-    --on-primary: #ffffff;
+  :root:not([data-theme="light"]) {
     --accent: #34d399;
     --bg: #0b1120;
     --surface: #111a2e;
     --surface-2: #1b2740;
     --bubble-in: #1b2740;
-    --bubble-out: #2563eb;
     --fg: #e8eef9;
     --muted: #94a3b8;
     --border: #233149;
@@ -43,6 +53,13 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 10px rgba(0, 0, 0, .3);
   }
 }
+
+/* --- Akzentfarbe (setzt --primary in jedem Modus) ------------------------- */
+:root[data-accent="green"]  { --primary: #059669; --primary-hover: #047857; }
+:root[data-accent="red"]    { --primary: #dc2626; --primary-hover: #b91c1c; }
+:root[data-accent="purple"] { --primary: #7c3aed; --primary-hover: #6d28d9; }
+:root[data-accent="orange"] { --primary: #ea580c; --primary-hover: #c2410c; }
+:root[data-accent="teal"]   { --primary: #0d9488; --primary-hover: #0f766e; }
 
 * { box-sizing: border-box; }
 
@@ -274,6 +291,37 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
 }
+
+/* --- Design-Menue (Modus + Akzentfarbe) --------------------------------- */
+.design-menu { position: relative; margin: 0 0 0 8px; }
+.design-menu > summary {
+  list-style: none; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted); transition: color .15s ease, border-color .15s ease;
+}
+.design-menu > summary::-webkit-details-marker { display: none; }
+.design-menu > summary:hover { color: var(--fg); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.design-menu[open] > summary { color: var(--primary); border-color: var(--primary); }
+.design-panel {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 50;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: var(--shadow); padding: 13px 15px; min-width: 212px;
+}
+.design-row + .design-row { margin-top: 13px; }
+.design-label { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }
+.design-opts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.design-mode {
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--bg);
+  color: var(--fg); font-size: 0.82rem; cursor: pointer; transition: border-color .15s ease;
+}
+.design-mode:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.design-mode.active { background: color-mix(in srgb, var(--primary) 16%, transparent); border-color: var(--primary); color: var(--primary); }
+.swatch {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer;
+  background: var(--sw); padding: 0;
+}
+.swatch:hover { transform: scale(1.08); }
+.swatch.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--sw); }
 
 /* --- Online-Toggle in der App-Bar --------------------------------------- */
 .online-form { margin: 0 0 0 14px; }

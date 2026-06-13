@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="light dark">
 <title>{% block title %}Chat{% endblock %}</title>
 <link rel="stylesheet" href="/static/style.css?v={{ asset_ver }}">
+<script src="/static/theme.js?v={{ asset_ver }}"></script>
 </head>
 <body>
 <header class="appbar">
@@ -28,6 +29,32 @@
         <span>Raeume</span>
       </a>
     </nav>
+    <details class="design-menu">
+      <summary class="design-btn" title="Design" aria-label="Design waehlen">
+        <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 2a10 10 0 0 0 0 20 2 2 0 0 0 2-2 2 2 0 0 1 2-2h1a4 4 0 0 0 4-4 8 8 0 0 0-9-12z"/></svg>
+      </summary>
+      <div class="design-panel">
+        <div class="design-row">
+          <span class="design-label">Modus</span>
+          <div class="design-opts">
+            <button type="button" class="design-mode" data-theme-set="auto">Auto</button>
+            <button type="button" class="design-mode" data-theme-set="light">Hell</button>
+            <button type="button" class="design-mode" data-theme-set="dark">Dunkel</button>
+          </div>
+        </div>
+        <div class="design-row">
+          <span class="design-label">Farbe</span>
+          <div class="design-opts">
+            <button type="button" class="swatch" data-accent-set="blue" style="--sw:#2563eb" title="Blau" aria-label="Blau"></button>
+            <button type="button" class="swatch" data-accent-set="green" style="--sw:#059669" title="Gruen" aria-label="Gruen"></button>
+            <button type="button" class="swatch" data-accent-set="red" style="--sw:#dc2626" title="Rot" aria-label="Rot"></button>
+            <button type="button" class="swatch" data-accent-set="purple" style="--sw:#7c3aed" title="Violett" aria-label="Violett"></button>
+            <button type="button" class="swatch" data-accent-set="orange" style="--sw:#ea580c" title="Orange" aria-label="Orange"></button>
+            <button type="button" class="swatch" data-accent-set="teal" style="--sw:#0d9488" title="Tuerkis" aria-label="Tuerkis"></button>
+          </div>
+        </div>
+      </div>
+    </details>
     {% if account_jid %}
     {% if account_state %}
     <form class="online-form" method="post" action="/account/online" id="online-form">
