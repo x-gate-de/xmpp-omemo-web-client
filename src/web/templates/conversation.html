@@ -15,9 +15,12 @@
   </span>
 </div>
 
-<form class="loadmore" method="post" action="/c/{{ partner }}/loadmore">
-  <button type="submit" class="btn ghost">Aeltere Nachrichten vom Server laden</button>
-</form>
+{% if messages %}
+<div class="loadmore" id="loadolder" data-partner="{{ partner }}"
+     data-oldest-ts="{{ oldest_ts }}" data-oldest-id="{{ oldest_id }}" data-has-more="{{ 1 if has_more else 0 }}">
+  <button type="button" class="btn ghost" id="loadolder-btn">{% if has_more %}Aeltere anzeigen{% else %}Aeltere vom Server laden{% endif %}</button>
+</div>
+{% endif %}
 
 <div class="thread" id="messages" data-partner="{{ partner }}" data-last-id="{{ max_id }}">
   {% for m in messages %}
