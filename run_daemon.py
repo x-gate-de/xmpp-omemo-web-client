@@ -2,23 +2,25 @@
 # -----------------------------------------------------------------------------
 # Skript: run_daemon.py
 # Autor: Torben Belz
-# Version: 1.0.0
+# Version: 2.0.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
-# - Einstiegspunkt fuer den Chat Archiv-Daemon.
+# - Einstiegspunkt fuer den Multi-User Archiv-Daemon (Account-Manager).
 # Ablauf:
-# - Konfiguration laden, Logging einrichten, Daemon verbinden und Event-Loop starten.
+# - Konfiguration + Account-Registry laden, Manager starten, Event-Loop laufen lassen.
 # Betriebs- und Wartungshinweise:
 # - Aufruf: python3 run_daemon.py --config /opt/omemo-web/config.yaml
-# - Laeuft im Betrieb als systemd-Service mit automatischem Reconnect.
+# - Haelt je aktivem Account eine dauerhafte XMPP-Verbindung.
 # -----------------------------------------------------------------------------
 
 import argparse
+import asyncio
 import logging
 import sys
 
+from src.accounts import AccountRegistry
 from src.config import ConfigError, load_config
-from src.daemon import build_daemon
+from src.manager import AccountManager
 
 
 def _setup_logging(log_cfg):
@@ -34,12 +36,8 @@ def _setup_logging(log_cfg):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Chat Archiv-Daemon")
-    parser.add_argument(
-        "--config",
-        default="/opt/omemo-web/config.yaml",
-        help="Pfad zur config.yaml",
-    )
+    parser = argparse.ArgumentParser(description="Chat Multi-User Archiv-Daemon")
+    parser.add_argument("--config", default="/opt/omemo-web/config.yaml", help="Pfad zur config.yaml")
     args = parser.parse_args()
 
     try:
@@ -51,19 +49,22 @@ def main():
     _setup_logging(config["logging"])
     logger = logging.getLogger("run_daemon")
 
-    bot = build_daemon(config)
-    # TLS-Verifikation ist Standard; slixmpp verifiziert das Serverzertifikat.
-    logger.info("Verbinde mit XMPP-Server ...")
-    xmpp_cfg = config["xmpp"]
-    # Expliziten Host nutzen, falls die JID-Domain (example.com) per DNS-SRV nicht
-    # auf den XMPP-Host (xmpp.example.com) aufloest. Sonst Standard-SRV-Aufloesung.
-    if xmpp_cfg.get("host"):
-        bot.connect(xmpp_cfg["host"], int(xmpp_cfg.get("port", 5222)))
-    else:
-        bot.connect()
-    # slixmpp 1.16 hat kein process(); der asyncio-Loop laeuft dauerhaft und
-    # slixmpp reconnectet bei Verbindungsabbruch selbsttaetig.
-    bot.loop.run_forever()
+    registry = AccountRegistry(
+        config["accounts"]["db_path"],
+        config["security"]["fernet_key"],
+        config["accounts"]["users_dir"],
+    )
+    manager = AccountManager(registry, config)
+
+    # Eigenen Event-Loop einrichten; die slixmpp-Bots haengen sich hier ein.
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.create_task(manager.run())
+    logger.info("Daemon laeuft (Multi-User)")
+    try:
+        loop.run_forever()
+    except KeyboardInterrupt:
+        pass
     return 0
 
 

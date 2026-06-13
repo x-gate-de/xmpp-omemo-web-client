@@ -46,10 +46,13 @@
 
 * { box-sizing: border-box; }
 
-html, body { height: 100%; }
+/* body waechst mit dem Inhalt (min-height statt height), sonst bricht das
+   sticky der App-Bar nach einem Viewport voll Nachrichten ab. */
+html { height: 100%; }
 
 body {
   margin: 0;
+  min-height: 100%;
   background: var(--bg);
   color: var(--fg);
   font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -272,6 +275,66 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
   * { transition: none !important; animation: none !important; }
 }
 
+/* --- Online-Toggle in der App-Bar --------------------------------------- */
+.online-form { margin: 0 0 0 14px; }
+.online-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 7px 13px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--fg); font-size: 0.85rem; font-weight: 500; cursor: pointer;
+  transition: border-color .15s ease;
+}
+.online-btn:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.online-btn .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
+.online-btn.on .dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+.online-btn.connecting .dot { background: #f59e0b; animation: pulse 1.1s ease-in-out infinite; }
+.online-btn.error .dot { background: var(--danger); }
+.online-btn.off { color: var(--muted); }
+@keyframes pulse { 50% { opacity: .35; } }
+
+/* --- Abmelden in der App-Bar -------------------------------------------- */
+.logout-form { margin: 0 0 0 12px; }
+.logout-btn {
+  display: inline-flex; align-items: center; gap: 7px; padding: 7px 12px;
+  border: 1px solid var(--border); border-radius: 999px; background: var(--surface);
+  color: var(--muted); font-size: 0.85rem; cursor: pointer; transition: color .15s ease, border-color .15s ease;
+}
+.logout-btn:hover { color: var(--fg); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+.who-jid { max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* --- Login --------------------------------------------------------------- */
+.login-body { min-height: 100dvh; display: grid; place-items: center; padding: 20px; }
+.login-card {
+  width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 18px; box-shadow: var(--shadow); padding: 30px 26px;
+}
+.login-brand { display: flex; align-items: center; gap: 10px; font-size: 1.4rem; font-weight: 700; color: var(--fg); }
+.login-brand svg { color: var(--primary); }
+.login-sub { color: var(--muted); margin: 8px 0 18px; font-size: 0.92rem; }
+.login-form label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--muted); margin-bottom: 13px; }
+.login-form .opt { font-weight: 400; }
+.login-form input {
+  display: block; width: 100%; margin-top: 5px; padding: 11px 13px; border: 1px solid var(--border);
+  border-radius: 10px; background: var(--bg); color: var(--fg); font-size: 1rem; outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.login-form input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+.login-submit { width: 100%; justify-content: center; margin-top: 6px; padding: 12px; font-size: 1rem; }
+.login-error {
+  background: color-mix(in srgb, var(--danger) 14%, transparent); color: var(--danger);
+  border-radius: 10px; padding: 10px 13px; font-size: 0.88rem; margin-bottom: 14px;
+}
+.login-note { color: var(--muted); font-size: 0.78rem; margin: 16px 0 0; line-height: 1.4; }
+.login-wait { text-align: center; padding: 18px 0 6px; }
+.login-wait p { margin: 6px 0; }
+.spinner {
+  width: 34px; height: 34px; margin: 6px auto 14px; border-radius: 50%;
+  border: 3px solid var(--border); border-top-color: var(--primary); animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 560px) {
+  .who-jid { display: none; }
+}
 @media (max-width: 480px) {
   .tab span { display: none; }
   .tab { padding: 9px; }

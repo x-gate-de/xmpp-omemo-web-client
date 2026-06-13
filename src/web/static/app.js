@@ -119,6 +119,41 @@
       .catch(function () {});
   }
 
+  // Login-Wartemodus: Validierungsstatus pollen (vom Daemon-Manager gesetzt).
+  var wait = document.getElementById("login-wait");
+  if (wait) {
+    setInterval(function () {
+      fetch("/api/login_status", { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d) return;
+          if (d.status === "ok") window.location.href = "/";
+          else if (d.status === "failed") window.location.href = "/login?error=1";
+        })
+        .catch(function () {});
+    }, 1500);
+    return;
+  }
+
+  // Online-Status live halten (App-Bar-Toggle): Verbindet … -> Online etc.
+  var onlineBtn = document.getElementById("online-btn");
+  if (onlineBtn) {
+    var refreshOnline = function () {
+      fetch("/api/account_status", { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (s) {
+          if (!s) return;
+          var lbl = document.getElementById("online-label");
+          var val = document.getElementById("online-value");
+          if (lbl) lbl.textContent = s.label;
+          if (val) val.value = s.next;
+          onlineBtn.className = "online-btn " + s.cls;
+        })
+        .catch(function () {});
+    };
+    setInterval(refreshOnline, 3000);
+  }
+
   var box = document.getElementById("messages");
   var list = document.getElementById("conv-list");
   if (box) {

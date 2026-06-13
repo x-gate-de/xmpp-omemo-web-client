@@ -27,6 +27,10 @@ fastapi==0.115.6
 uvicorn[standard]==0.34.0
 jinja2==3.1.5
 python-multipart==0.0.32
+itsdangerous==2.2.0
+
+# Verschluesselung der gespeicherten XMPP-Passwoerter (Fernet)
+cryptography==48.0.1
 
 # Konfiguration
 PyYAML==6.0.2

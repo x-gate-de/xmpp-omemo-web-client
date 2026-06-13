@@ -1,14 +1,15 @@
 # -----------------------------------------------------------------------------
 # Skript: src/config.py
 # Autor: Torben Belz
-# Version: 1.0.0
+# Version: 2.0.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
-# - Laedt und validiert die YAML-Konfiguration fuer Daemon und Web-UI.
+# - Laedt und validiert die YAML-Konfiguration (Multi-User-Betrieb).
 # Ablauf:
-# - YAML-Datei einlesen, Pflichtfelder pruefen, Defaults setzen.
+# - YAML einlesen, Pflichtfelder pruefen, Defaults setzen.
 # Betriebs- und Wartungshinweise:
-# - config.yaml enthaelt das XMPP-Passwort und gehoert nicht ins Repository.
+# - Zugangsdaten kommen NICHT mehr aus der config, sondern aus der Account-
+#   Registry (Login). Die config haelt nur globale Einstellungen + Server-Keys.
 # -----------------------------------------------------------------------------
 
 import logging
@@ -24,7 +25,6 @@ class ConfigError(Exception):
 
 
 # Laedt die Konfiguration aus einer YAML-Datei und validiert die Pflichtfelder.
-# Rueckgabe: verschachteltes dict. Wirft ConfigError bei fehlenden Pflichtwerten.
 def load_config(path):
     if not os.path.isfile(path):
         raise ConfigError(f"Konfigurationsdatei nicht gefunden: {path}")
@@ -32,34 +32,35 @@ def load_config(path):
     with open(path, encoding="utf8") as f:
         data = yaml.safe_load(f) or {}
 
+    # Globale XMPP-Defaults (werden beim Login vorbelegt).
     xmpp = data.get("xmpp") or {}
-    # Pflichtfelder fuer die XMPP-Anmeldung. Ohne JID/Passwort kein Betrieb.
-    if not xmpp.get("jid"):
-        raise ConfigError("xmpp.jid fehlt in der Konfiguration")
-    if not xmpp.get("password"):
-        raise ConfigError("xmpp.password fehlt in der Konfiguration")
-
-    # Defaults ergaenzen, damit der Rest des Codes sich auf Werte verlassen kann.
+    xmpp.setdefault("default_host", "")
+    xmpp.setdefault("default_port", 5222)
     xmpp.setdefault("resource", "archiver")
     xmpp.setdefault("tls_verify", True)
     data["xmpp"] = xmpp
 
     omemo = data.get("omemo") or {}
-    omemo.setdefault("state_path", "/var/lib/omemo-web/omemo_state.sqlite")
     omemo.setdefault("trust_policy", "btbv")
     data["omemo"] = omemo
 
-    archive = data.get("archive") or {}
-    archive.setdefault("db_path", "/var/lib/omemo-web/messages.sqlite")
-    data["archive"] = archive
+    accounts = data.get("accounts") or {}
+    accounts.setdefault("db_path", "/var/lib/omemo-web/accounts.db")
+    accounts.setdefault("users_dir", "/var/lib/omemo-web/users")
+    data["accounts"] = accounts
+
+    # Server-Keys sind Pflicht: ohne sie kein Verschluesseln/Sessions.
+    security = data.get("security") or {}
+    if not security.get("fernet_key"):
+        raise ConfigError("security.fernet_key fehlt (Schluessel fuer Passwort-Verschluesselung)")
+    if not security.get("session_secret"):
+        raise ConfigError("security.session_secret fehlt (Schluessel fuer Web-Sessions)")
+    data["security"] = security
 
     web = data.get("web") or {}
     web.setdefault("bind_host", "127.0.0.1")
     web.setdefault("bind_port", 8080)
     web.setdefault("base_path", "/")
-    # Pflicht-Login fuer die Web-UI (Klartext privater Nachrichten).
-    web.setdefault("auth_user", None)
-    web.setdefault("auth_password", None)
     data["web"] = web
 
     log = data.get("logging") or {}

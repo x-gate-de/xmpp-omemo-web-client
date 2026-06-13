@@ -1,85 +1,112 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 1.2.0
+# Version: 2.0.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
-# - Web-UI: Archiv lesen, 1:1 (OMEMO) und Gruppen (MUC) senden, Kontakte und
-#   oeffentliche Raeume anzeigen/beitreten, Live-Aktualisierung, Sende-Status.
+# - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
+#   validiert), Cookie-Session, je Nutzer ein eigenes Archiv.
 # Ablauf:
-# - Liest read-only; Sendeauftraege und Raum-Beitritte landen in DB-Tabellen,
-#   die der Daemon abarbeitet. Pflicht-Login (HTTP Basic).
+# - Beim Login wird ein XMPP-Bind getestet; bei Erfolg wird der Account in der
+#   Registry angelegt/aktiviert (Passwort verschluesselt) und eine Session gesetzt.
+#   Der Daemon-Manager verbindet den Account dauerhaft.
 # Betriebs- und Wartungshinweise:
 # - Zeigt entschluesselte private Nachrichten (Schutzbedarf HOCH).
 # -----------------------------------------------------------------------------
 
 import os
-import secrets
 import sqlite3
 import time
 from datetime import datetime
 
 import jinja2
-from fastapi import Depends, FastAPI, Form, HTTPException, status
-from fastapi.responses import HTMLResponse, RedirectResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi import Depends, FastAPI, Form, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.sessions import SessionMiddleware
 
+from src.accounts import AccountRegistry
 from src.config import load_config
 from src.schema import ensure_schema
 
 CONFIG_PATH = os.environ.get("OMEMO_WEB_CONFIG", "/opt/omemo-web/config.yaml")
 config = load_config(CONFIG_PATH)
 
-_web = config["web"]
-_db_path = config["archive"]["db_path"]
-
-if not _web.get("auth_user") or not _web.get("auth_password"):
-    raise RuntimeError("web.auth_user und web.auth_password muessen in config.yaml gesetzt sein")
-
-_init_conn = sqlite3.connect(_db_path)
-ensure_schema(_init_conn)
-_init_conn.close()
+_xmpp = config["xmpp"]
+_registry = AccountRegistry(
+    config["accounts"]["db_path"], config["security"]["fernet_key"], config["accounts"]["users_dir"]
+)
 
 app = FastAPI(title="Chat", docs_url=None, redoc_url=None, openapi_url=None)
+app.add_middleware(SessionMiddleware, secret_key=config["security"]["session_secret"], same_site="lax")
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
-security = HTTPBasic()
 
 _env = jinja2.Environment(
     loader=jinja2.FileSystemLoader(os.path.join(os.path.dirname(__file__), "templates")),
     autoescape=True,
 )
 
-
-def require_auth(credentials: HTTPBasicCredentials = Depends(security)):
-    user_ok = secrets.compare_digest(credentials.username, str(_web["auth_user"]))
-    pass_ok = secrets.compare_digest(credentials.password, str(_web["auth_password"]))
-    if not (user_ok and pass_ok):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Nicht autorisiert",
-            headers={"WWW-Authenticate": "Basic"},
-        )
-    return credentials.username
+# Cache-Busting: Versionskennung aus den mtimes der statischen Assets.
+_static_dir = os.path.join(os.path.dirname(__file__), "static")
 
 
-def _open_ro():
-    conn = sqlite3.connect(f"file:{_db_path}?mode=ro", uri=True, timeout=5)
+def _asset_version():
+    try:
+        return str(int(max(os.path.getmtime(os.path.join(_static_dir, f)) for f in ("style.css", "app.js"))))
+    except OSError:
+        return "1"
+
+
+_env.globals["asset_ver"] = _asset_version()
+
+
+# --- Authentifizierung ------------------------------------------------------
+
+class NotAuthenticated(Exception):
+    pass
+
+
+# Liefert den eingeloggten Account oder erzwingt Login.
+def require_account(request: Request):
+    jid = request.session.get("jid")
+    if not jid or not _registry.exists(jid):
+        raise NotAuthenticated()
+    return {"jid": jid, "archive_path": _registry.archive_path(jid)}
+
+
+@app.exception_handler(NotAuthenticated)
+async def _on_not_auth(request: Request, _exc):
+    if request.url.path.startswith("/api"):
+        return JSONResponse({"detail": "Nicht angemeldet"}, status_code=status.HTTP_401_UNAUTHORIZED)
+    return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# --- DB-Zugriff (je Account) ------------------------------------------------
+
+def _open_ro(db_path):
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True, timeout=5)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def _open_rw():
-    conn = sqlite3.connect(_db_path, timeout=5)
+def _open_rw(db_path):
+    conn = sqlite3.connect(db_path, timeout=5)
     conn.execute("PRAGMA busy_timeout=5000")
     return conn
+
+
+def _ensure_db(db_path):
+    conn = _open_rw(db_path)
+    try:
+        ensure_schema(conn)
+    finally:
+        conn.close()
 
 
 def _fmt_ts(ts):
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
 
 
-# Initialen fuer den Avatar aus Anzeigename bzw. JID-Localpart.
 def _initials(name, jid):
     base = (name or "").strip() or (jid or "").split("@")[0]
     parts = [p for p in base.replace(".", " ").replace("_", " ").replace("-", " ").split() if p]
@@ -88,14 +115,26 @@ def _initials(name, jid):
     return (base[:2] or "?").upper()
 
 
-# Stabile Farbnuance (0-359) je Gespraechspartner fuer den Avatar.
 def _hue(s):
     return sum(ord(c) for c in (s or "")) % 360
 
 
-# Konversationen/Raeume mit Zaehlern fuer Liste und Polling.
-def _conversation_rows():
-    conn = _open_ro()
+# Online-Status eines Accounts fuer die Anzeige + den Umschalter.
+# "next" ist der Wert, den der Toggle-Button setzt (Gegenteil von enabled).
+def _account_state(jid):
+    st = _registry.get_state(jid)
+    if not st or not st["enabled"]:
+        return {"enabled": False, "label": "Offline", "cls": "off", "next": 1}
+    auth = st["auth_state"]
+    if auth == "ok":
+        return {"enabled": True, "label": "Online", "cls": "on", "next": 0}
+    if auth == "failed":
+        return {"enabled": True, "label": "Anmeldung fehlgeschlagen", "cls": "error", "next": 0}
+    return {"enabled": True, "label": "Verbindet …", "cls": "connecting", "next": 0}
+
+
+def _conversation_rows(db_path):
+    conn = _open_ro(db_path)
     try:
         return conn.execute(
             "SELECT m.partner_jid AS partner, COUNT(*) AS cnt, MAX(m.ts_received) AS last_ts, "
@@ -115,7 +154,6 @@ def _conversation_rows():
         conn.close()
 
 
-# Kurze Vorschau der letzten Nachricht fuer die Liste.
 def _preview(last_body, last_dir, last_dec):
     if not last_dec:
         text = "Verschluesselte Nachricht"
@@ -126,13 +164,11 @@ def _preview(last_body, last_dir, last_dec):
     return ("Du: " + text) if last_dir == "out" else text
 
 
-def _conv_items():
+def _conv_items(db_path):
     items = []
-    for r in _conversation_rows():
+    for r in _conversation_rows(db_path):
         is_room = bool(r["is_room"])
-        name = (r["contact_name"] or r["room_name"] or r["partner"]) if not is_room else (r["room_name"] or r["partner"])
-        if not is_room and r["contact_name"]:
-            name = r["contact_name"]
+        name = r["contact_name"] or r["room_name"] or r["partner"]
         items.append({
             "partner": r["partner"], "name": name, "count": r["cnt"], "last": _fmt_ts(r["last_ts"]),
             "undecrypted": r["undecrypted"], "unread": r["unread"], "is_room": is_room,
@@ -143,17 +179,6 @@ def _conv_items():
     return items
 
 
-@app.get("/", response_class=HTMLResponse)
-def conversations(_user: str = Depends(require_auth)):
-    return _env.get_template("conversations.html").render(items=_conv_items(), nav_active="archiv")
-
-
-@app.get("/api/conversations")
-def api_conversations(_user: str = Depends(require_auth)):
-    return _conv_items()
-
-
-# Markiert ob eine JID ein Raum ist (fuer Anzeige und Sendeart).
 def _is_room(conn, jid):
     row = conn.execute(
         "SELECT 1 FROM mucs WHERE room_jid = ? UNION SELECT 1 FROM muc_available WHERE room_jid = ?",
@@ -162,8 +187,8 @@ def _is_room(conn, jid):
     return row is not None
 
 
-def _messages(partner, after_id=0):
-    conn = _open_ro()
+def _messages(db_path, partner, after_id=0):
+    conn = _open_ro(db_path)
     try:
         rows = conn.execute(
             "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
@@ -180,9 +205,8 @@ def _messages(partner, after_id=0):
     ]
 
 
-# Offene/fehlgeschlagene Sendeauftraege fuer die Anzeige als "wird gesendet"/"Fehler".
-def _pending(partner):
-    conn = _open_ro()
+def _pending(db_path, partner):
+    conn = _open_ro(db_path)
     try:
         rows = conn.execute(
             "SELECT body, status FROM outbox WHERE recipient_jid = ? AND status IN ('pending','error') ORDER BY id",
@@ -193,8 +217,8 @@ def _pending(partner):
     return [{"body": r["body"], "status": r["status"]} for r in rows]
 
 
-def _mark_read(partner):
-    conn = _open_rw()
+def _mark_read(db_path, partner):
+    conn = _open_rw(db_path)
     try:
         conn.execute(
             "INSERT INTO read_state (partner_jid, last_read_ts) VALUES (?, ?) "
@@ -206,9 +230,111 @@ def _mark_read(partner):
         conn.close()
 
 
+# --- Login / Logout ---------------------------------------------------------
+
+@app.get("/login", response_class=HTMLResponse)
+def login_form(request: Request, error: str = ""):
+    if request.session.get("jid"):
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+    pending = request.session.get("pending")
+    return _env.get_template("login.html").render(
+        default_server=_xmpp.get("default_host", ""), error=error,
+        waiting=bool(pending), pending_jid=pending or "",
+    )
+
+
+@app.post("/login")
+def login(request: Request, jid: str = Form(...), password: str = Form(...), server: str = Form("")):
+    jid = (jid or "").strip()
+    server = (server or "").strip() or _xmpp.get("default_host", "")
+    host, port = server, _xmpp.get("default_port", 5222)
+    if ":" in server:
+        host, _, p = server.partition(":")
+        port = int(p) if p.isdigit() else port
+    if not jid or not password:
+        return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Schnellpfad: bereits validierter, aktiver Account mit unveraendertem Passwort.
+    if _registry.verified_match(jid, password):
+        request.session.pop("pending", None)
+        request.session["jid"] = jid
+        return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Schutz: Ist der Account aktiv und validiert, aber das Passwort stimmt nicht,
+    # wird abgelehnt OHNE die laufende Verbindung/das gespeicherte Passwort zu aendern
+    # (verhindert, dass ein falscher Login einen aktiven Account stoert).
+    if _registry.is_ok(jid):
+        return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Sonst (neuer Account, oder zuvor fehlgeschlagen/deaktiviert): anlegen/aktualisieren;
+    # der Daemon-Manager validiert ueber die echte XMPP-Verbindung (kein Connect aus dem Web).
+    local = jid.split("@")[0]
+    _registry.upsert(jid, password, host=host, port=port,
+                     resource=_xmpp.get("resource", "archiver"), muc_nick=f"{local}-web")
+    _ensure_db(_registry.archive_path(jid))
+    request.session.pop("jid", None)
+    request.session["pending"] = jid
+    return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# Pollt den Validierungsstatus des laufenden Logins (vom Manager gesetzt).
+@app.get("/api/login_status")
+def login_status(request: Request):
+    jid = request.session.get("pending")
+    if not jid:
+        return {"status": "ok"} if request.session.get("jid") else {"status": "none"}
+    state = _registry.get_auth_state(jid)
+    if state == "ok":
+        request.session.pop("pending", None)
+        request.session["jid"] = jid
+        return {"status": "ok"}
+    if state == "failed":
+        request.session.pop("pending", None)
+        return {"status": "failed"}
+    return {"status": "pending"}
+
+
+@app.post("/logout")
+def logout(request: Request):
+    # Nur die Session beenden; die Hintergrund-Archivierung laeuft weiter.
+    request.session.clear()
+    return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# Schaltet "immer online" fuer den eigenen Account um (enabled-Flag).
+# enabled=0 -> der Manager trennt die Verbindung (keine Archivierung mehr),
+# enabled=1 -> der Manager verbindet wieder.
+@app.post("/account/online")
+def account_online(request: Request, value: str = Form(...), acc: dict = Depends(require_account)):
+    _registry.set_enabled(acc["jid"], value == "1")
+    back = request.headers.get("referer") or "/"
+    return RedirectResponse(url=back, status_code=status.HTTP_303_SEE_OTHER)
+
+
+@app.get("/api/account_status")
+def account_status(acc: dict = Depends(require_account)):
+    return _account_state(acc["jid"])
+
+
+# --- Chats ------------------------------------------------------------------
+
+@app.get("/", response_class=HTMLResponse)
+def conversations(acc: dict = Depends(require_account)):
+    return _env.get_template("conversations.html").render(
+        items=_conv_items(acc["archive_path"]), nav_active="archiv", account_jid=acc["jid"],
+        account_state=_account_state(acc["jid"]),
+    )
+
+
+@app.get("/api/conversations")
+def api_conversations(acc: dict = Depends(require_account)):
+    return _conv_items(acc["archive_path"])
+
+
 @app.get("/c/{partner:path}", response_class=HTMLResponse)
-def conversation(partner: str, _user: str = Depends(require_auth)):
-    conn = _open_ro()
+def conversation(partner: str, acc: dict = Depends(require_account)):
+    db_path = acc["archive_path"]
+    conn = _open_ro(db_path)
     try:
         is_room = _is_room(conn, partner)
         row = conn.execute("SELECT name FROM contacts WHERE jid = ?", (partner,)).fetchone()
@@ -218,34 +344,34 @@ def conversation(partner: str, _user: str = Depends(require_auth)):
     finally:
         conn.close()
     name = (room_name if is_room else contact_name) or partner
-    messages = _messages(partner)
-    _mark_read(partner)
+    messages = _messages(db_path, partner)
+    _mark_read(db_path, partner)
     return _env.get_template("conversation.html").render(
-        partner=partner, name=name, messages=messages, pending=_pending(partner),
+        partner=partner, name=name, messages=messages, pending=_pending(db_path, partner),
         is_room=is_room, initials=_initials(name if name != partner else "", partner),
-        hue=_hue(partner), nav_active="archiv",
+        hue=_hue(partner), nav_active="archiv", account_jid=acc["jid"],
+        account_state=_account_state(acc["jid"]),
     )
 
 
 @app.get("/api/messages/{partner:path}")
-def api_messages(partner: str, after_id: int = 0, _user: str = Depends(require_auth)):
-    msgs = _messages(partner, after_id)
+def api_messages(partner: str, after_id: int = 0, acc: dict = Depends(require_account)):
+    db_path = acc["archive_path"]
+    msgs = _messages(db_path, partner, after_id)
     if msgs:
-        _mark_read(partner)
-    return {"messages": msgs, "pending": _pending(partner)}
+        _mark_read(db_path, partner)
+    return {"messages": msgs, "pending": _pending(db_path, partner)}
 
 
-# Legt einen Sendeauftrag ab; Art (1:1 OMEMO oder Gruppe) wird automatisch erkannt.
 @app.post("/c/{partner:path}/send")
-def send_message(partner: str, body: str = Form(...), _user: str = Depends(require_auth)):
+def send_message(partner: str, body: str = Form(...), acc: dict = Depends(require_account)):
     text = (body or "").strip()
     if text:
-        conn = _open_rw()
+        conn = _open_rw(acc["archive_path"])
         try:
             kind = "groupchat" if _is_room(conn, partner) else "chat"
             conn.execute(
-                "INSERT INTO outbox (recipient_jid, body, status, created_ts, kind) "
-                "VALUES (?, ?, 'pending', ?, ?)",
+                "INSERT INTO outbox (recipient_jid, body, status, created_ts, kind) VALUES (?, ?, 'pending', ?, ?)",
                 (partner, text, time.time(), kind),
             )
             conn.commit()
@@ -255,18 +381,18 @@ def send_message(partner: str, body: str = Form(...), _user: str = Depends(requi
 
 
 @app.post("/new")
-def new_conversation(partner: str = Form(...), _user: str = Depends(require_auth)):
+def new_conversation(partner: str = Form(...), acc: dict = Depends(require_account)):
     target = (partner or "").strip()
     if not target:
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     return RedirectResponse(url=f"/c/{target}", status_code=status.HTTP_303_SEE_OTHER)
 
 
-# --- Kontakte (Roster) -----------------------------------------------------
+# --- Kontakte ---------------------------------------------------------------
 
 @app.get("/contacts", response_class=HTMLResponse)
-def contacts(_user: str = Depends(require_auth)):
-    conn = _open_ro()
+def contacts(acc: dict = Depends(require_account)):
+    conn = _open_ro(acc["archive_path"])
     try:
         rows = conn.execute(
             "SELECT jid, name FROM contacts ORDER BY (name = '' OR name IS NULL), LOWER(name), jid"
@@ -275,14 +401,16 @@ def contacts(_user: str = Depends(require_auth)):
         conn.close()
     items = [{"jid": r["jid"], "name": r["name"] or r["jid"],
               "initials": _initials(r["name"], r["jid"]), "hue": _hue(r["jid"])} for r in rows]
-    return _env.get_template("contacts.html").render(items=items, nav_active="kontakte")
+    return _env.get_template("contacts.html").render(
+        items=items, nav_active="kontakte", account_jid=acc["jid"], account_state=_account_state(acc["jid"])
+    )
 
 
-# --- Oeffentliche Raeume (MUC) ---------------------------------------------
+# --- Raeume -----------------------------------------------------------------
 
 @app.get("/rooms", response_class=HTMLResponse)
-def rooms(_user: str = Depends(require_auth)):
-    conn = _open_ro()
+def rooms(acc: dict = Depends(require_account)):
+    conn = _open_ro(acc["archive_path"])
     try:
         joined = conn.execute(
             "SELECT room_jid, name FROM mucs WHERE joined = 1 ORDER BY LOWER(COALESCE(name, room_jid))"
@@ -300,20 +428,22 @@ def rooms(_user: str = Depends(require_auth)):
          "initials": _initials(r["name"], r["room_jid"]), "hue": _hue(r["room_jid"])}
         for r in available
     ]
-    return _env.get_template("rooms.html").render(joined=joined_items, available=avail_items, nav_active="raeume")
+    return _env.get_template("rooms.html").render(
+        joined=joined_items, available=avail_items, nav_active="raeume", account_jid=acc["jid"],
+        account_state=_account_state(acc["jid"]),
+    )
 
 
 @app.post("/rooms/join")
-def join_room(room_jid: str = Form(...), _user: str = Depends(require_auth)):
+def join_room(room_jid: str = Form(...), acc: dict = Depends(require_account)):
     target = (room_jid or "").strip()
     if target:
-        conn = _open_rw()
+        conn = _open_rw(acc["archive_path"])
         try:
             name = None
             row = conn.execute("SELECT name FROM muc_available WHERE room_jid = ?", (target,)).fetchone()
             if row:
                 name = row[0]
-            # joined=1 -> der Daemon betritt den Raum beim naechsten Outbox-Durchlauf.
             conn.execute(
                 "INSERT INTO mucs (room_jid, name, nick, joined) VALUES (?, ?, NULL, 1) "
                 "ON CONFLICT(room_jid) DO UPDATE SET joined = 1",

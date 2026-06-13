@@ -3,52 +3,43 @@
 # Autor: Torben Belz
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
-# - Beispielkonfiguration. Ohne Secrets versioniert.
+# - Beispielkonfiguration (Multi-User). Ohne Secrets versioniert.
 # Betriebs- und Wartungshinweise:
-# - Diese Datei nach `config.yaml` kopieren und ausfuellen.
-# - `config.yaml` enthaelt das XMPP-Passwort und gehoert NICHT ins Repository
-#   (steht in .gitignore). Dateirechte setzen: chmod 0600 config.yaml
+# - Diese Datei nach `config.yaml` kopieren und ausfuellen. Rechte: chmod 0600.
+# - Zugangsdaten kommen NICHT aus dieser Datei, sondern aus dem Web-Login.
+# - security.fernet_key:     python3 -c "from cryptography.fernet import Fernet;print(Fernet.generate_key().decode())"
+# - security.session_secret: python3 -c "import secrets;print(secrets.token_urlsafe(48))"
 # -----------------------------------------------------------------------------
 
 xmpp:
-  # Eigene JID des Accounts. Der Daemon meldet sich als zusaetzliche Ressource
-  # dieses Accounts an und wird so ein weiteres OMEMO-Geraet.
-  jid: "user@example.com"
-  # Passwort wird NICHT hier, sondern in der echten config.yaml gesetzt.
-  password: "HIER-NICHT-EINTRAGEN-NUR-IN-config.yaml"
-  # Ressourcenname, unter dem der Daemon erscheint.
+  # Beim Login vorbelegter Server (ueberschreibbar). Leer = DNS-SRV der JID-Domain.
+  default_host: "xmpp.example.com"
+  default_port: 5222
+  # Ressourcenname, unter dem ein Account-Daemon erscheint.
   resource: "archiver"
-  # Nick in Gruppenraeumen (MUC). Default: lokaler Teil der JID. Muss sich von
-  # einem ggf. gleichzeitig aktiven anderen Client im selben Raum unterscheiden.
-  # muc_nick: "myname-web"
-  # Optional: Host/Port explizit setzen, falls nicht per DNS-SRV aufloesbar.
-  # host: "xmpp.example.com"
-  # port: 5222
   tls_verify: true
 
 omemo:
-  # Persistenter OMEMO-State (Identity-Key, Device-ID, Sessions).
-  # Getrennt vom Klartext-Archiv. Dateirechte 0600. NICHT aus Backups restoren.
-  state_path: "/var/lib/omemo-web/omemo_state.sqlite"
   # Trust-Politik: "btbv" (Blind Trust Before Verification) oder "manual".
   trust_policy: "btbv"
 
-archive:
-  # SQLite-Datei des Klartext-Archivs (entschluesselte Nachrichten).
-  # Getrennt vom OMEMO-State. Dateirechte 0600.
-  db_path: "/var/lib/omemo-web/messages.sqlite"
+accounts:
+  # Registry der Accounts (verschluesselte Passwoerter) und je-Account-Daten.
+  db_path: "/var/lib/omemo-web/accounts.db"
+  users_dir: "/var/lib/omemo-web/users"
+
+security:
+  # Fernet-Schluessel zum Verschluesseln der gespeicherten XMPP-Passwoerter.
+  # Verlust = gespeicherte Passwoerter nicht mehr entschluesselbar.
+  fernet_key: "HIER-FERNET-KEY-EINTRAGEN"
+  # Schluessel zum Signieren der Web-Session-Cookies.
+  session_secret: "HIER-SESSION-SECRET-EINTRAGEN"
 
 web:
-  # Die Web-UI lauscht lokal; ein Reverse-Proxy (z. B. nginx) terminiert nach aussen.
   bind_host: "127.0.0.1"
   bind_port: 8080
   base_path: "/"
-  # Pflicht-Login der Web-UI (HTTP Basic) - Klartext privater Nachrichten.
-  # Passwort nur in der echten config.yaml setzen.
-  auth_user: "admin"
-  auth_password: "HIER-NICHT-EINTRAGEN-NUR-IN-config.yaml"
 
 logging:
-  # DEBUG nur in der Entwicklung. Niemals Klartext-Inhalte oder Schluessel loggen.
   level: "INFO"
   file: "/var/log/omemo-web/daemon.log"
