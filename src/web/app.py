@@ -133,10 +133,43 @@ def _account_state(jid):
     return {"enabled": True, "label": "Verbindet …", "cls": "connecting", "next": 0}
 
 
-def _conversation_rows(db_path):
+def _preview(last_body, last_dir, last_dec):
+    if not last_dec:
+        text = "Verschluesselte Nachricht"
+    else:
+        text = (last_body or "").replace("\n", " ").strip() or "(leer)"
+    if len(text) > 60:
+        text = text[:60] + "…"
+    return ("Du: " + text) if last_dir == "out" else text
+
+
+# Letzte N Nachrichten einer Konversation (chronologisch) fuer die Rasterkachel.
+def _recent(conn, partner, n=4):
+    rows = conn.execute(
+        "SELECT direction, body, decrypted, sender FROM messages "
+        "WHERE partner_jid = ? ORDER BY id DESC LIMIT ?",
+        (partner, n),
+    ).fetchall()
+    out = []
+    for r in reversed(rows):
+        if r["decrypted"]:
+            text = (r["body"] or "").replace("\n", " ").strip() or "(leer)"
+        else:
+            text = "[verschluesselt]"
+        if len(text) > 90:
+            text = text[:90] + "…"
+        if r["direction"] == "out":
+            text = "Du: " + text
+        elif r["sender"]:
+            text = r["sender"] + ": " + text
+        out.append({"direction": r["direction"], "text": text})
+    return out
+
+
+def _conv_items(db_path):
     conn = _open_ro(db_path)
     try:
-        return conn.execute(
+        rows = conn.execute(
             "SELECT m.partner_jid AS partner, COUNT(*) AS cnt, MAX(m.ts_received) AS last_ts, "
             "  SUM(CASE WHEN m.decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
             "  SUM(CASE WHEN m.direction = 'in' AND m.ts_received > "
@@ -150,32 +183,20 @@ def _conversation_rows(db_path):
             "  EXISTS(SELECT 1 FROM mucs g WHERE g.room_jid = m.partner_jid) AS is_room "
             "FROM messages m GROUP BY m.partner_jid ORDER BY last_ts DESC"
         ).fetchall()
+        items = []
+        for r in rows:
+            is_room = bool(r["is_room"])
+            name = r["contact_name"] or r["room_name"] or r["partner"]
+            items.append({
+                "partner": r["partner"], "name": name, "count": r["cnt"], "last": _fmt_ts(r["last_ts"]),
+                "undecrypted": r["undecrypted"], "unread": r["unread"], "is_room": is_room,
+                "preview": _preview(r["last_body"], r["last_dir"], r["last_dec"]),
+                "initials": _initials(name if name != r["partner"] else "", r["partner"]),
+                "hue": _hue(r["partner"]),
+                "recent": _recent(conn, r["partner"]),
+            })
     finally:
         conn.close()
-
-
-def _preview(last_body, last_dir, last_dec):
-    if not last_dec:
-        text = "Verschluesselte Nachricht"
-    else:
-        text = (last_body or "").replace("\n", " ").strip() or "(leer)"
-    if len(text) > 60:
-        text = text[:60] + "…"
-    return ("Du: " + text) if last_dir == "out" else text
-
-
-def _conv_items(db_path):
-    items = []
-    for r in _conversation_rows(db_path):
-        is_room = bool(r["is_room"])
-        name = r["contact_name"] or r["room_name"] or r["partner"]
-        items.append({
-            "partner": r["partner"], "name": name, "count": r["cnt"], "last": _fmt_ts(r["last_ts"]),
-            "undecrypted": r["undecrypted"], "unread": r["unread"], "is_room": is_room,
-            "preview": _preview(r["last_body"], r["last_dir"], r["last_dec"]),
-            "initials": _initials(name if name != r["partner"] else "", r["partner"]),
-            "hue": _hue(r["partner"]),
-        })
     return items
 
 
