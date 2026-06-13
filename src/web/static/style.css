@@ -294,6 +294,26 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
   * { transition: none !important; animation: none !important; }
 }
 
+/* --- Such-Icon in der App-Bar ------------------------------------------- */
+.iconbtn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--border);
+  background: var(--surface); color: var(--muted); margin: 0 0 0 8px; text-decoration: none;
+  transition: color .15s ease, border-color .15s ease;
+}
+.iconbtn:hover { color: var(--fg); border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
+
+/* --- Suche --------------------------------------------------------------- */
+.search-form { display: flex; gap: 9px; margin-bottom: 16px; }
+.search-form input {
+  flex: 1; min-width: 0; padding: 11px 15px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--surface); color: var(--fg); font-size: 0.95rem; outline: none;
+}
+.search-form input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent); }
+.search-count { color: var(--muted); font-size: 0.85rem; margin: 0 4px 10px; }
+.search-snippet { display: block; color: var(--muted); font-size: 0.88rem; margin-top: 3px; line-height: 1.45; overflow-wrap: anywhere; }
+.search-snippet mark { background: color-mix(in srgb, var(--primary) 28%, transparent); color: var(--fg); border-radius: 3px; padding: 0 2px; }
+
 /* --- Design-Menue (Modus + Akzentfarbe) --------------------------------- */
 .design-menu { position: relative; margin: 0 0 0 8px; }
 .design-menu > summary {

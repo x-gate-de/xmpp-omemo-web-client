@@ -119,6 +119,63 @@ def _hue(s):
     return sum(ord(c) for c in (s or "")) % 360
 
 
+def _like_escape(s):
+    return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+# Baut einen Snippet um den ersten Treffer und zerlegt ihn in Segmente
+# (match=True fuer die Fundstelle) zur sicheren Hervorhebung im Template.
+def _highlight(text, q):
+    text = (text or "").replace("\n", " ")
+    low, ql = text.lower(), q.lower()
+    idx = low.find(ql)
+    if idx < 0:
+        return [{"text": text[:160] + ("…" if len(text) > 160 else ""), "match": False}]
+    start = max(0, idx - 60)
+    end = min(len(text), idx + len(q) + 110)
+    snippet = ("… " if start > 0 else "") + text[start:end] + (" …" if end < len(text) else "")
+    segs, s_low, i = [], snippet.lower(), 0
+    while True:
+        j = s_low.find(ql, i)
+        if j < 0:
+            segs.append({"text": snippet[i:], "match": False})
+            break
+        if j > i:
+            segs.append({"text": snippet[i:j], "match": False})
+        segs.append({"text": snippet[j:j + len(q)], "match": True})
+        i = j + len(q)
+    return segs
+
+
+# Volltextsuche ueber das (entschluesselte) Archiv des Nutzers.
+def _search(db_path, q, limit=100):
+    pat = "%" + _like_escape(q) + "%"
+    conn = _open_ro(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT m.id, m.partner_jid, m.direction, m.body, m.ts_received, m.sender, "
+            "  (SELECT name FROM contacts c WHERE c.jid = m.partner_jid) AS contact_name, "
+            "  (SELECT name FROM muc_available a WHERE a.room_jid = m.partner_jid) AS room_name, "
+            "  EXISTS(SELECT 1 FROM mucs g WHERE g.room_jid = m.partner_jid) AS is_room "
+            "FROM messages m WHERE m.decrypted = 1 AND m.body LIKE ? ESCAPE '\\' "
+            "ORDER BY m.ts_received DESC LIMIT ?",
+            (pat, limit),
+        ).fetchall()
+    finally:
+        conn.close()
+    out = []
+    for r in rows:
+        is_room = bool(r["is_room"])
+        name = r["contact_name"] or r["room_name"] or r["partner_jid"]
+        out.append({
+            "partner": r["partner_jid"], "name": name, "is_room": is_room,
+            "ts": _fmt_ts(r["ts_received"]), "direction": r["direction"], "sender": r["sender"],
+            "initials": _initials(name if name != r["partner_jid"] else "", r["partner_jid"]),
+            "hue": _hue(r["partner_jid"]), "segments": _highlight(r["body"], q),
+        })
+    return out
+
+
 # Online-Status eines Accounts fuer die Anzeige + den Umschalter.
 # "next" ist der Wert, den der Toggle-Button setzt (Gegenteil von enabled).
 def _account_state(jid):
@@ -376,6 +433,16 @@ def conversations(acc: dict = Depends(require_account)):
 @app.get("/api/conversations")
 def api_conversations(acc: dict = Depends(require_account)):
     return _conv_items(acc["archive_path"])
+
+
+@app.get("/search", response_class=HTMLResponse)
+def search(q: str = "", acc: dict = Depends(require_account)):
+    q = (q or "").strip()
+    results = _search(acc["archive_path"], q) if len(q) >= 2 else []
+    return _env.get_template("search.html").render(
+        q=q, results=results, nav_active="", account_jid=acc["jid"],
+        account_state=_account_state(acc["jid"]),
+    )
 
 
 @app.get("/c/{partner:path}", response_class=HTMLResponse)

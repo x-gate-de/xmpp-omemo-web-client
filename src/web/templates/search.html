@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Suche - Chat{% endblock %}
+{% block content %}
+<form class="search-form" method="get" action="/search">
+  <input type="search" name="q" value="{{ q }}" placeholder="Im Archiv suchen …" autofocus autocomplete="off" aria-label="Suche">
+  <button class="btn" type="submit">Suchen</button>
+</form>
+
+{% if q and not results %}
+  <div class="empty"><p>Keine Treffer fuer „{{ q }}".</p></div>
+{% elif results %}
+  <div class="search-count">{{ results|length }} Treffer{% if results|length == 100 %} (mehr eingrenzen){% endif %}</div>
+  <div class="list">
+    {% for r in results %}
+      <a class="list-row" href="/c/{{ r.partner }}">
+        <span class="avatar {% if r.is_room %}room{% endif %}" style="--h: {{ r.hue }}">{{ r.initials }}</span>
+        <span class="row-main">
+          <span class="row-top">
+            <span class="row-name">{{ r.name }}</span>
+            <span class="row-time">{{ r.ts }}</span>
+          </span>
+          <span class="search-snippet">{% if r.direction == 'out' %}Du: {% elif r.sender %}{{ r.sender }}: {% endif %}{% for seg in r.segments %}{% if seg.match %}<mark>{{ seg.text }}</mark>{% else %}{{ seg.text }}{% endif %}{% endfor %}</span>
+        </span>
+      </a>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="empty"><p>Gib mindestens 2 Zeichen ein, um das Archiv zu durchsuchen.</p></div>
+{% endif %}
+{% endblock %}
