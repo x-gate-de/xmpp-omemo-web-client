@@ -5,6 +5,15 @@
 - Optional: MAM backfill to cover daemon downtime.
 - Optional: account deletion (remove stored credentials + archive).
 
+## [1.0.0] - 2026-06-13 - First stable release
+First complete release of the always-online OMEMO archiver with web UI.
+Bundles the full feature set developed so far (see the entries below):
+multi-user login with encrypted-at-rest credentials, one permanently
+connected daemon per account, OMEMO decryption and plaintext archive, web UI
+with sending, live updates, list/grid view, theme switcher, full-text search,
+quote replies, OMEMO verification, installable app icon / full screen, and
+on-demand MAM backfill.
+
 ## [0.1.0] - 2026-06-13 - Initial public release
 - Multi-user: log in with your own XMPP JID/password/server; credentials are
   validated against the XMPP server and stored encrypted (Fernet). Cookie session.
