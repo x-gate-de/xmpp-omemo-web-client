@@ -7,7 +7,7 @@
 
 <div class="list" id="conv-list">
   {% for it in items %}
-    <a class="list-row" href="/c/{{ it.partner }}">
+    <a class="list-row {% if it.unread %}has-unread{% endif %}" href="/c/{{ it.partner }}">
       <span class="avatar {% if it.is_room %}room{% endif %}" style="--h: {{ it.hue }}">{{ it.initials }}</span>
       <span class="row-main">
         <span class="row-top">

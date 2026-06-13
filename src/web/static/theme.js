@@ -10,7 +10,7 @@
 
 (function () {
   try {
-    var keys = ["theme", "accent", "view", "cols", "sort", "lines"];
+    var keys = ["theme", "accent", "view", "cols", "sort", "lines", "density"];
     for (var i = 0; i < keys.length; i++) {
       var v = localStorage.getItem(keys[i]);
       if (v) document.documentElement.setAttribute("data-" + keys[i], v);

@@ -90,7 +90,7 @@
   }
 
   function renderConvRow(it) {
-    var a = el("a", "list-row");
+    var a = el("a", "list-row" + (it.unread ? " has-unread" : ""));
     a.href = "/c/" + it.partner;
     a.appendChild(avatar(it.initials, it.hue, it.is_room));
     var main = el("span", "row-main");
@@ -147,8 +147,8 @@
   var listRefresh = null;
 
   // Design-Umschalter (Modus, Akzentfarbe, Ansicht, Spalten, Sortierung): sofort anwenden + merken.
-  var DESIGN_KEYS = ["theme", "accent", "view", "cols", "sort", "lines"];
-  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto", sort: "activity", lines: "4" };
+  var DESIGN_KEYS = ["theme", "accent", "view", "cols", "sort", "lines", "density"];
+  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto", sort: "activity", lines: "4", density: "comfortable" };
   function applyDesign(key, val) {
     document.documentElement.setAttribute("data-" + key, val);
     try { localStorage.setItem(key, val); } catch (e) {}
