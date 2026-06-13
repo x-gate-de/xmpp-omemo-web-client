@@ -144,7 +144,7 @@ def _preview(last_body, last_dir, last_dec):
 
 
 # Letzte N Nachrichten einer Konversation (chronologisch) fuer die Rasterkachel.
-def _recent(conn, partner, n=4):
+def _recent(conn, partner, n=8):
     rows = conn.execute(
         "SELECT direction, body, decrypted, sender FROM messages "
         "WHERE partner_jid = ? ORDER BY id DESC LIMIT ?",
@@ -156,8 +156,8 @@ def _recent(conn, partner, n=4):
             text = (r["body"] or "").replace("\n", " ").strip() or "(leer)"
         else:
             text = "[verschluesselt]"
-        if len(text) > 90:
-            text = text[:90] + "…"
+        if len(text) > 240:
+            text = text[:240] + "…"
         if r["direction"] == "out":
             text = "Du: " + text
         elif r["sender"]:
