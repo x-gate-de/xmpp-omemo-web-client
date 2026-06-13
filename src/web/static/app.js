@@ -119,6 +119,32 @@
       .catch(function () {});
   }
 
+  // Design-Umschalter (Modus + Akzentfarbe): sofort anwenden + merken.
+  function applyDesign(key, val) {
+    document.documentElement.setAttribute("data-" + key, val);
+    try { localStorage.setItem(key, val); } catch (e) {}
+    markDesign();
+    var menu = document.querySelector("details.design-menu");
+    if (menu) menu.removeAttribute("open");
+  }
+  function markDesign() {
+    var theme = document.documentElement.getAttribute("data-theme") || "auto";
+    var accent = document.documentElement.getAttribute("data-accent") || "blue";
+    var i, els = document.querySelectorAll("[data-theme-set]");
+    for (i = 0; i < els.length; i++) els[i].classList.toggle("active", els[i].getAttribute("data-theme-set") === theme);
+    els = document.querySelectorAll("[data-accent-set]");
+    for (i = 0; i < els.length; i++) els[i].classList.toggle("active", els[i].getAttribute("data-accent-set") === accent);
+  }
+  (function () {
+    var i, tb = document.querySelectorAll("[data-theme-set]"), ab = document.querySelectorAll("[data-accent-set]");
+    function bind(b, key) {
+      b.addEventListener("click", function () { applyDesign(key, b.getAttribute("data-" + key + "-set")); });
+    }
+    for (i = 0; i < tb.length; i++) bind(tb[i], "theme");
+    for (i = 0; i < ab.length; i++) bind(ab[i], "accent");
+    if (tb.length || ab.length) markDesign();
+  })();
+
   // Login-Wartemodus: Validierungsstatus pollen (vom Daemon-Manager gesetzt).
   var wait = document.getElementById("login-wait");
   if (wait) {
