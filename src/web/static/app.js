@@ -119,7 +119,9 @@
       .catch(function () {});
   }
 
-  // Design-Umschalter (Modus + Akzentfarbe): sofort anwenden + merken.
+  // Design-Umschalter (Modus, Akzentfarbe, Ansicht, Spalten): sofort anwenden + merken.
+  var DESIGN_KEYS = ["theme", "accent", "view", "cols"];
+  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto" };
   function applyDesign(key, val) {
     document.documentElement.setAttribute("data-" + key, val);
     try { localStorage.setItem(key, val); } catch (e) {}
@@ -128,21 +130,26 @@
     if (menu) menu.removeAttribute("open");
   }
   function markDesign() {
-    var theme = document.documentElement.getAttribute("data-theme") || "auto";
-    var accent = document.documentElement.getAttribute("data-accent") || "blue";
-    var i, els = document.querySelectorAll("[data-theme-set]");
-    for (i = 0; i < els.length; i++) els[i].classList.toggle("active", els[i].getAttribute("data-theme-set") === theme);
-    els = document.querySelectorAll("[data-accent-set]");
-    for (i = 0; i < els.length; i++) els[i].classList.toggle("active", els[i].getAttribute("data-accent-set") === accent);
+    for (var k = 0; k < DESIGN_KEYS.length; k++) {
+      var key = DESIGN_KEYS[k];
+      var cur = document.documentElement.getAttribute("data-" + key) || DESIGN_DEFAULT[key];
+      var els = document.querySelectorAll("[data-" + key + "-set]");
+      for (var i = 0; i < els.length; i++) {
+        els[i].classList.toggle("active", els[i].getAttribute("data-" + key + "-set") === cur);
+      }
+    }
   }
   (function () {
-    var i, tb = document.querySelectorAll("[data-theme-set]"), ab = document.querySelectorAll("[data-accent-set]");
+    var bound = false;
     function bind(b, key) {
       b.addEventListener("click", function () { applyDesign(key, b.getAttribute("data-" + key + "-set")); });
     }
-    for (i = 0; i < tb.length; i++) bind(tb[i], "theme");
-    for (i = 0; i < ab.length; i++) bind(ab[i], "accent");
-    if (tb.length || ab.length) markDesign();
+    for (var k = 0; k < DESIGN_KEYS.length; k++) {
+      var key = DESIGN_KEYS[k];
+      var els = document.querySelectorAll("[data-" + key + "-set]");
+      for (var i = 0; i < els.length; i++) { bind(els[i], key); bound = true; }
+    }
+    if (bound) markDesign();
   })();
 
   // Login-Wartemodus: Validierungsstatus pollen (vom Daemon-Manager gesetzt).
