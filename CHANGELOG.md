@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- Close chats (permanently hide): in addition to minimize, each tile has a close
+  button (x). Closed chats disappear from the list entirely and stay hidden even
+  on new messages (unlike minimized ones); the archived data is preserved. Restore
+  via the collapsed "Closed chats (N)" section at the end of the list or by opening
+  the chat directly. Stored per browser in localStorage; close and minimize are
+  mutually exclusive.
 - Relative time in the chat list: a relative label ("just now", "X min ago",
   "X h ago", "yesterday", "X days ago") is shown before the absolute timestamp
   of the last message. Computed client-side from `last_ts` and kept current by

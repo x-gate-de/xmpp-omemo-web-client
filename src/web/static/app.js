@@ -1,12 +1,14 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.4.0
+// Version: 1.5.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
 // - Minimieren/Wiederoeffnen von Konversationskacheln (lokal gespeichert);
 //   eine neue Nachricht klappt eine minimierte Kachel automatisch wieder auf.
+// - Schliessen von Chats (dauerhaft ausgeblendet, Daten bleiben; wiederherstellbar
+//   ueber "Geschlossene Chats" oder durch direktes Oeffnen).
 // - Relative Zeitangabe ("vor X Min") vor dem Zeitstempel der letzten Nachricht.
 // Hinweis:
 // - Nutzerinhalte werden ueber textContent eingefuegt (XSS-Schutz). SVG-Icons
@@ -56,6 +58,26 @@
   }
   function expandConv(partner) {
     var m = getCollapsed(); delete m[partner]; setCollapsed(m);
+    if (listRefresh) listRefresh();
+  }
+
+  // Geschlossene Konversationen: Liste von partner-JIDs in localStorage. Anders als
+  // beim Minimieren bleiben sie ausgeblendet -- auch bei neuen Nachrichten. Sichtbar
+  // wieder nur ueber den Bereich "Geschlossene Chats" oder durch direktes Oeffnen.
+  function getClosed() {
+    try { var a = JSON.parse(localStorage.getItem("closed") || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  function setClosed(arr) {
+    try { localStorage.setItem("closed", JSON.stringify(arr)); } catch (e) {}
+  }
+  function closeConv(partner) {
+    var a = getClosed(); if (a.indexOf(partner) < 0) a.push(partner); setClosed(a);
+    // Aus dem Minimiert-Zustand entfernen, damit eine Konversation nicht doppelt gilt.
+    var m = getCollapsed(); if (m[partner] != null) { delete m[partner]; setCollapsed(m); }
+    if (listRefresh) listRefresh();
+  }
+  function reopenConv(partner) {
+    setClosed(getClosed().filter(function (p) { return p !== partner; }));
     if (listRefresh) listRefresh();
   }
 
@@ -118,16 +140,17 @@
   var SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
   var REPLY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
   var MIN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  var CLOSE_ICON = '<svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
 
-  // Kompakter Platzhalter fuer eine minimierte Konversation: Klick oeffnet sie wieder.
-  function renderConvChip(it) {
+  // Kompakter Platzhalter fuer eine weggelegte Konversation; onClick holt sie zurueck.
+  function renderConvChip(it, onClick) {
     var chip = document.createElement("button");
     chip.type = "button"; chip.className = "conv-chip";
     chip.title = "Wieder oeffnen: " + it.name;
     chip.appendChild(avatar(it.initials, it.hue, it.is_room));
     chip.appendChild(el("span", "chip-name", it.name));
     if (it.unread) chip.appendChild(el("span", "pill unread", String(it.unread)));
-    chip.addEventListener("click", function () { expandConv(it.partner); });
+    chip.addEventListener("click", onClick);
     return chip;
   }
 
@@ -154,16 +177,27 @@
     }
     a.appendChild(main);
     tile.appendChild(a);
-    // Minimieren-Knopf (raeumt die Kachel weg, ohne Inhalt zu verlieren).
+    // Kachel-Aktionen oben rechts: Minimieren (kehrt bei neuer Nachricht zurueck)
+    // und Schliessen (bleibt ausgeblendet; Daten bleiben erhalten).
+    var actions = el("span", "tile-actions");
     var minBtn = document.createElement("button");
-    minBtn.type = "button"; minBtn.className = "tile-min"; minBtn.title = "Minimieren";
+    minBtn.type = "button"; minBtn.className = "tile-act tile-min"; minBtn.title = "Minimieren";
     minBtn.setAttribute("aria-label", "Konversation minimieren");
     minBtn.appendChild(icon(MIN_ICON));
     minBtn.addEventListener("click", function (e) {
       e.preventDefault(); e.stopPropagation();
       collapseConv(it.partner, it.last_ts || 0);
     });
-    tile.appendChild(minBtn);
+    var closeBtn = document.createElement("button");
+    closeBtn.type = "button"; closeBtn.className = "tile-act tile-close"; closeBtn.title = "Chat schliessen (ausblenden)";
+    closeBtn.setAttribute("aria-label", "Konversation schliessen");
+    closeBtn.appendChild(icon(CLOSE_ICON));
+    closeBtn.addEventListener("click", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      closeConv(it.partner);
+    });
+    actions.appendChild(minBtn); actions.appendChild(closeBtn);
+    tile.appendChild(actions);
     // Antwort direkt aus der Kachel.
     var form = document.createElement("form");
     form.className = "tile-compose"; form.method = "post"; form.action = "/c/" + it.partner + "/send";
@@ -202,10 +236,15 @@
         var ae = document.activeElement;
         if (ae && ae.closest && ae.closest("#conv-list .tile-compose")) return;
         items = sortItems(items);
-        // Minimierte herausfiltern; eine seither neuere Nachricht klappt automatisch auf.
+        // Geschlossene ganz ausblenden; Minimierte in die Ablage; eine seither neuere
+        // Nachricht klappt eine minimierte (nicht: geschlossene) Kachel automatisch auf.
+        var closedArr = getClosed();
+        var closedSet = {};
+        closedArr.forEach(function (p) { closedSet[p] = true; });
         var collapsed = getCollapsed();
-        var dirty = false, visible = [], hidden = [];
+        var dirty = false, visible = [], hidden = [], gone = [];
         items.forEach(function (it) {
+          if (closedSet[it.partner]) { gone.push(it); return; }
           var marker = collapsed[it.partner];
           if (marker != null && !(it.last_ts > marker)) {
             hidden.push(it);
@@ -221,9 +260,26 @@
           var tray = el("div", "collapsed-tray");
           tray.appendChild(el("span", "tray-label", "Minimiert (" + hidden.length + ")"));
           var chips = el("div", "tray-chips");
-          hidden.forEach(function (it) { chips.appendChild(renderConvChip(it)); });
+          hidden.forEach(function (it) {
+            chips.appendChild(renderConvChip(it, (function (p) { return function () { expandConv(p); }; })(it.partner)));
+          });
           tray.appendChild(chips);
           list.appendChild(tray);
+        }
+        if (gone.length) {
+          // Eigener, standardmaessig eingeklappter Bereich -- geschlossene Chats bleiben
+          // unsichtbar, sind aber jederzeit wiederherstellbar (Daten bleiben erhalten).
+          var det = document.createElement("details");
+          det.className = "closed-section";
+          var sum = document.createElement("summary");
+          sum.textContent = "Geschlossene Chats (" + gone.length + ")";
+          det.appendChild(sum);
+          var cchips = el("div", "tray-chips");
+          gone.forEach(function (it) {
+            cchips.appendChild(renderConvChip(it, (function (p) { return function () { reopenConv(p); }; })(it.partner)));
+          });
+          det.appendChild(cchips);
+          list.appendChild(det);
         }
         var hint = document.getElementById("empty-hint");
         if (hint) hint.style.display = items.length ? "none" : "";
@@ -368,6 +424,11 @@
     var convPartner = box.getAttribute("data-partner");
     var lastId = parseInt(box.getAttribute("data-last-id") || "0", 10);
     var loadingOlder = false;
+
+    // Wer einen Chat oeffnet, will ihn sehen: aus geschlossen/minimiert entfernen,
+    // damit er beim Zurueckkehren zur Liste wieder normal erscheint.
+    setClosed(getClosed().filter(function (p) { return p !== convPartner; }));
+    var _cm = getCollapsed(); if (_cm[convPartner] != null) { delete _cm[convPartner]; setCollapsed(_cm); }
 
     // Live: neue Nachrichten anhaengen. Erkennt MAM-Nachladungen (alte Zeit) und laedt
     // dann die Seite neu fuer korrekte Chronologie -- ausser waehrend manuellem Nachladen.
