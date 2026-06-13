@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- SPEC.md brought up to date: multi-user login (F1), session-based access control
+  for the web UI (F6), and new requirements F12-F18 (full-text search, quote
+  replies, OMEMO verification, pagination and on-demand MAM backfill, online
+  toggle, presentation/ergonomics incl. minimize/close and relative time,
+  installability). Non-functional requirements and scope updated accordingly.
 - Close chats (permanently hide): in addition to minimize, each tile has a close
   button (x). Closed chats disappear from the list entirely and stay hidden even
   on new messages (unlike minimized ones); the archived data is preserved. Restore
