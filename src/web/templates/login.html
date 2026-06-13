@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Anmelden - Chat</title>
+<link rel="stylesheet" href="/static/style.css?v={{ asset_ver }}">
+</head>
+<body class="login-body">
+  <div class="login-card">
+    <div class="login-brand">
+      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5z"/></svg>
+      <span>Chat</span>
+    </div>
+
+    {% if waiting %}
+      <div id="login-wait" class="login-wait">
+        <div class="spinner" aria-hidden="true"></div>
+        <p>Verbinde mit <strong>{{ pending_jid }}</strong> &hellip;</p>
+        <p class="login-note">Zugangsdaten werden gegen den XMPP-Server geprueft.</p>
+      </div>
+    {% else %}
+      <p class="login-sub">Mit deinen XMPP-Zugangsdaten anmelden.</p>
+      {% if error %}<div class="login-error">Anmeldung fehlgeschlagen — JID, Passwort oder Server pruefen.</div>{% endif %}
+      <form method="post" action="/login" class="login-form">
+        <label>XMPP-JID
+          <input type="text" name="jid" placeholder="user@example.com" autocomplete="username" required autofocus>
+        </label>
+        <label>Passwort
+          <input type="password" name="password" autocomplete="current-password" required>
+        </label>
+        <label>Server <span class="opt">(optional)</span>
+          <input type="text" name="server" value="{{ default_server }}" placeholder="xmpp.example.com">
+        </label>
+        <button class="btn login-submit" type="submit">Anmelden</button>
+      </form>
+      <p class="login-note">Dein Account wird danach dauerhaft online gehalten und archiviert
+        eingehende Nachrichten — auch wenn du nicht eingeloggt bist.</p>
+    {% endif %}
+  </div>
+  <script src="/static/app.js?v={{ asset_ver }}"></script>
+</body>
+</html>
