@@ -19,6 +19,9 @@
           {% if it.unread %}<span class="pill unread">{{ it.unread }}</span>{% endif %}
           {% if it.undecrypted %}<span class="pill warn">{{ it.undecrypted }}</span>{% endif %}
         </span>
+        <span class="conv-recent">
+          {% for m in it.recent %}<span class="cr-line {{ m.direction }}">{{ m.text }}</span>{% endfor %}
+        </span>
       </span>
     </a>
   {% endfor %}

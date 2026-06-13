@@ -330,8 +330,22 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 :root[data-view="grid"] .list {
   display: grid;
   gap: 10px;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
 }
+
+/* --- Kachel mit letzten Nachrichten (nur Raster, nur Chats) ------------- */
+.conv-recent { display: none; }
+:root[data-view="grid"] #conv-list .list-row { align-items: flex-start; min-height: 150px; }
+:root[data-view="grid"] #conv-list .row-preview { display: none; }
+:root[data-view="grid"] #conv-list .conv-recent {
+  display: flex; flex-direction: column; gap: 3px; margin-top: 9px;
+  padding-top: 9px; border-top: 1px solid var(--border);
+}
+.conv-recent .cr-line {
+  font-size: 0.82rem; line-height: 1.45; color: var(--muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.conv-recent .cr-line.out { color: color-mix(in srgb, var(--fg) 55%, var(--muted)); }
 :root[data-view="grid"][data-cols="2"] .list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 :root[data-view="grid"][data-cols="3"] .list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 :root[data-view="grid"][data-cols="4"] .list { grid-template-columns: repeat(4, minmax(0, 1fr)); }

@@ -102,8 +102,31 @@
     if (it.unread) sub.appendChild(el("span", "pill unread", String(it.unread)));
     if (it.undecrypted) sub.appendChild(el("span", "pill warn", String(it.undecrypted)));
     main.appendChild(top); main.appendChild(sub);
+    if (it.recent && it.recent.length) {
+      var rec = el("span", "conv-recent");
+      for (var j = 0; j < it.recent.length; j++) {
+        rec.appendChild(el("span", "cr-line " + (it.recent[j].direction === "out" ? "out" : "in"), it.recent[j].text));
+      }
+      main.appendChild(rec);
+    }
     a.appendChild(main);
     return a;
+  }
+
+  // Sortiert die Konversationen nach der gewaehlten Einstellung. JS-sort ist stabil,
+  // daher behalten gleichrangige Eintraege die Aktivitaets-Reihenfolge der API.
+  function sortItems(items) {
+    var sort = document.documentElement.getAttribute("data-sort") || "activity";
+    if (sort === "name") {
+      return items.slice().sort(function (a, b) {
+        var x = (a.name || "").toLowerCase(), y = (b.name || "").toLowerCase();
+        return x < y ? -1 : (x > y ? 1 : 0);
+      });
+    }
+    if (sort === "unread") {
+      return items.slice().sort(function (a, b) { return (b.unread || 0) - (a.unread || 0); });
+    }
+    return items; // activity: API-Reihenfolge (neueste zuerst)
   }
 
   function pollList(list) {
@@ -111,6 +134,7 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (items) {
         if (!items) return;
+        items = sortItems(items);
         list.textContent = "";
         items.forEach(function (it) { list.appendChild(renderConvRow(it)); });
         var hint = document.getElementById("empty-hint");
@@ -119,13 +143,17 @@
       .catch(function () {});
   }
 
-  // Design-Umschalter (Modus, Akzentfarbe, Ansicht, Spalten): sofort anwenden + merken.
-  var DESIGN_KEYS = ["theme", "accent", "view", "cols"];
-  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto" };
+  // Wird gesetzt, sobald eine Konversationsliste auf der Seite ist (fuer Re-Render bei Sortwechsel).
+  var listRefresh = null;
+
+  // Design-Umschalter (Modus, Akzentfarbe, Ansicht, Spalten, Sortierung): sofort anwenden + merken.
+  var DESIGN_KEYS = ["theme", "accent", "view", "cols", "sort"];
+  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto", sort: "activity" };
   function applyDesign(key, val) {
     document.documentElement.setAttribute("data-" + key, val);
     try { localStorage.setItem(key, val); } catch (e) {}
     markDesign();
+    if (key === "sort" && listRefresh) listRefresh();
     var menu = document.querySelector("details.design-menu");
     if (menu) menu.removeAttribute("open");
   }
@@ -194,6 +222,9 @@
     window.scrollTo(0, document.body.scrollHeight);
     setInterval(function () { pollConversation(box, pendingBox); }, 3000);
   } else if (list) {
-    setInterval(function () { pollList(list); }, 5000);
+    listRefresh = function () { pollList(list); };
+    // Bei gespeicherter Nicht-Standard-Sortierung sofort umsortieren (Server liefert Aktivitaet).
+    if ((document.documentElement.getAttribute("data-sort") || "activity") !== "activity") listRefresh();
+    setInterval(listRefresh, 5000);
   }
 })();
