@@ -68,38 +68,6 @@
     return window.innerHeight + window.scrollY >= document.body.scrollHeight - 140;
   }
 
-  function pollConversation(box, pendingBox) {
-    var partner = box.getAttribute("data-partner");
-    var lastId = parseInt(box.getAttribute("data-last-id") || "0", 10);
-    fetch("/api/messages/" + encodeURIComponent(partner) + "?after_id=" + lastId, { credentials: "same-origin" })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (data) {
-        if (!data) return;
-        var msgs = data.messages || [];
-        // MAM-Backfill landet als Nachricht mit alter Zeit -> Seite neu laden,
-        // damit alles korrekt chronologisch einsortiert wird.
-        if (msgs.length) {
-          var kids = box.children;
-          var lastTs = kids.length ? kids[kids.length - 1].getAttribute("data-ts") : "";
-          for (var k = 0; k < msgs.length; k++) {
-            if (lastTs && msgs[k].ts && msgs[k].ts < lastTs) { window.location.reload(); return; }
-          }
-        }
-        var stick = nearBottom();
-        msgs.forEach(function (m) {
-          box.appendChild(renderMessage(m));
-          if (m.id > lastId) lastId = m.id;
-        });
-        box.setAttribute("data-last-id", lastId);
-        pendingBox.textContent = "";
-        (data.pending || []).forEach(function (p) { pendingBox.appendChild(renderPending(p)); });
-        var hint = document.getElementById("empty-hint");
-        if (hint && (box.children.length || pendingBox.children.length)) hint.style.display = "none";
-        if (stick) window.scrollTo(0, document.body.scrollHeight);
-      })
-      .catch(function () {});
-  }
-
   var SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
   function renderConvRow(it) {
     var tile = el("div", "list-row conv-tile" + (it.unread ? " has-unread" : ""));
@@ -245,8 +213,102 @@
   var list = document.getElementById("conv-list");
   if (box) {
     var pendingBox = document.getElementById("pending");
+    var convPartner = box.getAttribute("data-partner");
+    var lastId = parseInt(box.getAttribute("data-last-id") || "0", 10);
+    var loadingOlder = false;
+
+    // Live: neue Nachrichten anhaengen. Erkennt MAM-Nachladungen (alte Zeit) und laedt
+    // dann die Seite neu fuer korrekte Chronologie -- ausser waehrend manuellem Nachladen.
+    function pollConversation() {
+      fetch("/api/messages/" + encodeURIComponent(convPartner) + "?after_id=" + lastId, { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (data) {
+          if (!data) return;
+          var msgs = data.messages || [];
+          if (loadingOlder) {
+            // Nur Cursor mitziehen, nicht anhaengen/neu laden (Paginierung haengt selbst an).
+            msgs.forEach(function (m) { if (m.id > lastId) lastId = m.id; });
+            pendingBox.textContent = "";
+            (data.pending || []).forEach(function (p) { pendingBox.appendChild(renderPending(p)); });
+            return;
+          }
+          if (msgs.length) {
+            var kids = box.children;
+            var lastTs = kids.length ? kids[kids.length - 1].getAttribute("data-ts") : "";
+            for (var k = 0; k < msgs.length; k++) {
+              if (lastTs && msgs[k].ts && msgs[k].ts < lastTs) { window.location.reload(); return; }
+            }
+          }
+          var stick = nearBottom();
+          msgs.forEach(function (m) { box.appendChild(renderMessage(m)); if (m.id > lastId) lastId = m.id; });
+          pendingBox.textContent = "";
+          (data.pending || []).forEach(function (p) { pendingBox.appendChild(renderPending(p)); });
+          var hint = document.getElementById("empty-hint");
+          if (hint && (box.children.length || pendingBox.children.length)) hint.style.display = "none";
+          if (stick) window.scrollTo(0, document.body.scrollHeight);
+        })
+        .catch(function () {});
+    }
     window.scrollTo(0, document.body.scrollHeight);
-    setInterval(function () { pollConversation(box, pendingBox); }, 3000);
+    setInterval(pollConversation, 3000);
+
+    // --- Paginierung: aeltere Nachrichten nachladen (lokal, dann per MAM) ---
+    var older = document.getElementById("loadolder");
+    if (older) {
+      var olderBtn = document.getElementById("loadolder-btn");
+      var cursorTs = parseFloat(older.getAttribute("data-oldest-ts") || "0");
+      var cursorId = parseInt(older.getAttribute("data-oldest-id") || "0", 10);
+      var localExhausted = older.getAttribute("data-has-more") === "0";
+
+      function prependMessages(msgs) {
+        if (!msgs.length) return;
+        var scroller = document.scrollingElement || document.documentElement;
+        var prevH = scroller.scrollHeight, prevTop = scroller.scrollTop;
+        var frag = document.createDocumentFragment();
+        msgs.forEach(function (m) { frag.appendChild(renderMessage(m)); if (m.id > lastId) lastId = m.id; });
+        box.insertBefore(frag, box.firstChild);
+        cursorTs = msgs[0].ts_raw; cursorId = msgs[0].id;
+        scroller.scrollTop = prevTop + (scroller.scrollHeight - prevH);  // Scrollposition erhalten
+      }
+      function loadLocal() {
+        return fetch("/api/older/" + encodeURIComponent(convPartner) + "?before_ts=" + cursorTs + "&before_id=" + cursorId,
+          { credentials: "same-origin" }).then(function (r) { return r.ok ? r.json() : null; });
+      }
+      function setLabel() { olderBtn.textContent = localExhausted ? "Aeltere vom Server laden" : "Aeltere anzeigen"; }
+
+      olderBtn.addEventListener("click", function () {
+        if (olderBtn.disabled) return;
+        olderBtn.disabled = true;
+        if (!localExhausted) {
+          olderBtn.textContent = "Laedt …";
+          loadLocal().then(function (d) {
+            if (d && d.messages.length) prependMessages(d.messages);
+            localExhausted = !(d && d.has_more);
+            setLabel(); olderBtn.disabled = false;
+          }).catch(function () { setLabel(); olderBtn.disabled = false; });
+          return;
+        }
+        // Lokal erschoepft -> vom Server (MAM) holen, dann lokal nachladen.
+        olderBtn.textContent = "Lade vom Server …";
+        loadingOlder = true;
+        fetch("/c/" + encodeURIComponent(convPartner) + "/loadmore", { method: "POST", credentials: "same-origin" })
+          .then(function () {
+            var tries = 0;
+            (function poll() {
+              tries++;
+              loadLocal().then(function (d) {
+                if (d && d.messages.length) {
+                  prependMessages(d.messages);
+                  localExhausted = !(d && d.has_more);
+                  loadingOlder = false; setLabel(); olderBtn.disabled = false;
+                } else if (tries < 6) { setTimeout(poll, 1500); }
+                else { loadingOlder = false; olderBtn.textContent = "Aeltere vom Server laden"; olderBtn.disabled = false; }
+              }).catch(function () { loadingOlder = false; setLabel(); olderBtn.disabled = false; });
+            })();
+          })
+          .catch(function () { loadingOlder = false; setLabel(); olderBtn.disabled = false; });
+      });
+    }
   } else if (list) {
     listRefresh = function () { pollList(list); };
     // Bei gespeicherter Nicht-Standard-Sortierung sofort umsortieren (Server liefert Aktivitaet).

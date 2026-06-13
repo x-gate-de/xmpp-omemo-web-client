@@ -208,25 +208,48 @@ def _is_room(conn, jid):
     return row is not None
 
 
-def _messages(db_path, partner, after_id=0, order="id"):
-    # order="ts": chronologisch (fuer die Vollansicht, damit MAM-Nachladungen an der
-    # richtigen Stelle einsortiert werden). order="id": inkrementell (neue Nachrichten).
-    order_sql = "ts_received ASC, id ASC" if order == "ts" else "id ASC"
+def _msg_dict(r):
+    return {"id": r["id"], "direction": r["direction"], "body": r["body"],
+            "decrypted": bool(r["decrypted"]), "ts": _fmt_ts(r["ts_received"]),
+            "ts_raw": r["ts_received"], "sender": r["sender"], "status": r["status"]}
+
+
+# Inkrementell: neue Nachrichten nach einer id (Live-Aktualisierung).
+def _messages(db_path, partner, after_id=0):
     conn = _open_ro(db_path)
     try:
         rows = conn.execute(
             "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
-            "WHERE partner_jid = ? AND id > ? ORDER BY " + order_sql,
+            "WHERE partner_jid = ? AND id > ? ORDER BY id ASC",
             (partner, after_id),
         ).fetchall()
     finally:
         conn.close()
-    return [
-        {"id": r["id"], "direction": r["direction"], "body": r["body"],
-         "decrypted": bool(r["decrypted"]), "ts": _fmt_ts(r["ts_received"]),
-         "sender": r["sender"], "status": r["status"]}
-        for r in rows
-    ]
+    return [_msg_dict(r) for r in rows]
+
+
+# Seitenweises Laden (Keyset nach (ts, id)): die letzte Seite oder aeltere davor.
+# Rueckgabe: (Nachrichten chronologisch, has_more = es gibt noch aeltere lokal).
+def _messages_page(db_path, partner, before_ts=None, before_id=None, limit=50):
+    conn = _open_ro(db_path)
+    try:
+        if before_ts is None:
+            rows = conn.execute(
+                "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
+                "WHERE partner_jid = ? ORDER BY ts_received DESC, id DESC LIMIT ?",
+                (partner, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
+                "WHERE partner_jid = ? AND (ts_received < ? OR (ts_received = ? AND id < ?)) "
+                "ORDER BY ts_received DESC, id DESC LIMIT ?",
+                (partner, before_ts, before_ts, before_id, limit),
+            ).fetchall()
+    finally:
+        conn.close()
+    has_more = len(rows) == limit
+    return [_msg_dict(r) for r in reversed(rows)], has_more
 
 
 def _pending(db_path, partner):
@@ -368,15 +391,26 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
     finally:
         conn.close()
     name = (room_name if is_room else contact_name) or partner
-    messages = _messages(db_path, partner, order="ts")  # chronologisch (inkl. MAM-Nachladungen)
+    # Nur die letzte Seite laden (Robustheit bei sehr langen Verlaeufen wie 'noc').
+    messages, has_more = _messages_page(db_path, partner)
     max_id = max((m["id"] for m in messages), default=0)
+    oldest = messages[0] if messages else None
     _mark_read(db_path, partner)
     return _env.get_template("conversation.html").render(
         partner=partner, name=name, messages=messages, max_id=max_id, pending=_pending(db_path, partner),
-        is_room=is_room, initials=_initials(name if name != partner else "", partner),
+        oldest_ts=(oldest["ts_raw"] if oldest else 0), oldest_id=(oldest["id"] if oldest else 0),
+        has_more=has_more, is_room=is_room, initials=_initials(name if name != partner else "", partner),
         hue=_hue(partner), nav_active="archiv", account_jid=acc["jid"],
         account_state=_account_state(acc["jid"]),
     )
+
+
+# Aeltere Nachrichten aus dem lokalen Archiv (Paginierung, Keyset vor dem Cursor).
+@app.get("/api/older/{partner:path}")
+def api_older(partner: str, before_ts: float = 0, before_id: int = 0, acc: dict = Depends(require_account)):
+    msgs, has_more = _messages_page(acc["archive_path"], partner,
+                                    before_ts=before_ts if before_ts else None, before_id=before_id)
+    return {"messages": msgs, "has_more": has_more}
 
 
 @app.get("/api/messages/{partner:path}")
