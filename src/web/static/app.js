@@ -93,7 +93,6 @@
     var sub = el("span", "row-sub");
     sub.appendChild(el("span", "row-preview", it.preview));
     if (it.unread) sub.appendChild(el("span", "pill unread", String(it.unread)));
-    if (it.undecrypted) sub.appendChild(el("span", "pill warn", String(it.undecrypted)));
     main.appendChild(top); main.appendChild(sub);
     if (it.recent && it.recent.length) {
       var rec = el("span", "conv-recent");
