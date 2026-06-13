@@ -6,30 +6,43 @@ Abweichungen zwischen Code und SPEC gelten als Bug.
 ## Uebersicht
 
 Chat ist ein dauerhaft laufender XMPP-Client, der als zusaetzliches OMEMO-Geraet
-des eigenen Benutzeraccounts am Firmenchat (`xmpp.example.com`) teilnimmt. Er empfaengt
-alle 1:1-Nachrichten, entschluesselt sie sofort (OMEMO, XEP-0384), speichert den Klartext
-dauerhaft und stellt ihn ueber eine Web-UI ortsunabhaengig zum Nachlesen bereit. Damit
-loest er das Problem, dass OMEMO-Nachrichten nur an gerade aktive Geraete zugestellt und
-auf wechselnden Clients (Buero, Home Office, Mobil) verpasst werden.
+eines Benutzeraccounts am Firmenchat (`xmpp.example.com`) teilnimmt. Er empfaengt alle
+1:1-Nachrichten, entschluesselt sie sofort (OMEMO, XEP-0384), speichert den Klartext
+dauerhaft und stellt ihn ueber eine Web-UI ortsunabhaengig zum Nachlesen und Senden
+bereit. Damit loest er das Problem, dass OMEMO-Nachrichten nur an gerade aktive Geraete
+zugestellt und auf wechselnden Clients (Buero, Home Office, Mobil) verpasst werden.
 
-Das System besteht aus zwei Prozessen, die sich nur ueber die Datenbank koppeln:
-1. **Archiv-Daemon** — XMPP/OMEMO, immer online, schreibt Klartext.
-2. **Web-UI** — liest die Datenbank, zeigt Verlaeufe.
+Das System ist **mehrbenutzerfaehig**: Jeder Nutzer meldet sich mit seinen eigenen
+XMPP-Zugangsdaten an. Fuer jeden aktiven Account wird dauerhaft eine eigene
+XMPP/OMEMO-Verbindung gehalten und ein eigenes Klartext-Archiv gefuehrt. Ein Nutzer
+sieht ausschliesslich sein eigenes Archiv.
+
+Logische Komponenten, gekoppelt nur ueber Datenbanken:
+1. **Account-Registry/Manager** — verwaltet die Accounts (Zugangsdaten verschluesselt)
+   und haelt fuer jeden aktivierten Account einen Archiv-Daemon online.
+2. **Archiv-Daemon (je Account)** — XMPP/OMEMO, immer online, schreibt Klartext.
+3. **Web-UI** — Login, Lesen, Senden, Suchen, Verwalten (Trust, Online-Status).
 
 ## Funktionale Anforderungen
 
-### F1 — XMPP-Verbindung und Geraeteregistrierung
-- Eingabe: JID (`<user>@xmpp.example.com`), Passwort, Ressourcenname (Default `archiver`)
-  aus `config.yaml`.
-- Verarbeitung: Verbindung mit TLS-Verifikation; Anmeldung als eigene Ressource;
-  Veroeffentlichung des OMEMO-Bundles/der Device-ID in der eigenen PEP-Geraeteliste
-  (XEP-0163/0384); Aktivierung von Message Carbons (XEP-0280).
-- Ausgabe: Daemon ist online und als zusaetzliches OMEMO-Geraet des Accounts gelistet.
+### F1 — Mehrbenutzer-Login und XMPP-Verbindung
+- Eingabe: Anmeldung in der Web-UI mit XMPP-JID, Passwort und (optional) Serverhost.
+  Globale Vorgaben (Standard-Host, Ressourcenname, Schluessel) liegen in `config.yaml`.
+- Verarbeitung: Die Zugangsdaten werden beim Login gegen den XMPP-Server geprueft.
+  Bei Erfolg wird der Account in der Account-Registry (`accounts.db`) angelegt/aktiviert,
+  das Passwort **verschluesselt** gespeichert (Fernet, Schluessel `security.fernet_key`
+  aus `config.yaml`), und eine Cookie-Session gesetzt. Der Manager verbindet jeden
+  aktivierten Account dauerhaft mit TLS-Verifikation als eigene Ressource (Default
+  `archiver`), veroeffentlicht das OMEMO-Bundle/die Device-ID in der PEP-Geraeteliste
+  (XEP-0163/0384) und aktiviert Message Carbons (XEP-0280).
+- Ausgabe: Der Daemon des Accounts ist online und als zusaetzliches OMEMO-Geraet gelistet.
 - Fehlerverhalten: Bei Auth-/Verbindungsfehler klare Fehlermeldung (ohne Passwort),
-  automatischer Reconnect mit Backoff.
+  der Account-Status wird auf `failed` gesetzt; automatischer Reconnect mit Backoff fuer
+  zuvor erfolgreich verbundene Accounts.
 
-### F2 — Stabile OMEMO-Identitaet
-- Der Daemon haelt seine Identity-Keys und Device-ID dauerhaft im OMEMO-State.
+### F2 — Stabile OMEMO-Identitaet (je Account)
+- Jeder Daemon haelt seine Identity-Keys und Device-ID dauerhaft im OMEMO-State
+  (eigener Store je Account).
 - Bei Neustart wird derselbe State geladen — KEINE Neuregistrierung.
 - Geht der State verloren, gilt der Daemon zwingend als neues Geraet; das ist zu
   protokollieren und erfordert erneuten Trust durch die Gegenstellen.
@@ -41,39 +54,41 @@ Das System besteht aus zwei Prozessen, die sich nur ueber die Datenbank koppeln:
   behandelt — eine Nachricht wird nur einmal entschluesselt/gespeichert.
 - Ausgabe: Klartext-Nachricht persistiert (siehe F5).
 - Fehlerverhalten: Nicht entschluesselbare Nachrichten (fremdes Geraet, fehlender Key)
-  werden als „unlesbar" mit Metadaten protokolliert, nicht verworfen; der Daemon laeuft weiter.
+  werden als „unlesbar" mit Metadaten gespeichert, nicht verworfen; der Daemon laeuft weiter.
 
 ### F4 — Trust-Politik
 - Default: Blind Trust Before Verification (BTBV) — neue Geraete von Kontakten werden
   automatisch vertraut, solange der Account-Fingerprint nicht manuell verifiziert wurde.
-- Die Politik ist in `config.yaml` konfigurierbar.
-- Begruendung: Ein automatischer Archivierer kann Fingerprints nicht manuell verifizieren.
+- Manuelle Verifizierung/Sperrung einzelner Geraete ist ueber die Web-UI moeglich
+  (siehe F14).
+- Begruendung: Ein automatischer Archivierer kann Fingerprints nicht selbst verifizieren.
 
-### F5 — Archivierung (Persistenz)
+### F5 — Archivierung (Persistenz, je Account)
 - Speicherung pro Nachricht: Zeitstempel (Empfang + ggf. originaler Stanza-Timestamp),
   Gespraechspartner-JID, Richtung (eingehend/ausgehend), Klartext, Nachrichten-ID,
-  Entschluesselungsstatus.
-- Eigene gesendete Nachrichten (via Carbons sichtbar) werden ebenfalls archiviert, damit
-  der Verlauf vollstaendig ist.
-- Datenhaltung: relationale DB (SQLite als Default; PostgreSQL 17 auf dem Host optional).
+  Absender-Nick (bei Raeumen), Entschluesselungs- und Sendestatus.
+- Eigene gesendete Nachrichten (via Carbons oder eigener Versand) werden ebenfalls
+  archiviert; die eigene Stanza-ID wird mitgefuehrt, um beim MAM-Nachladen Duplikate
+  zu erkennen.
+- Datenhaltung: ein eigenes SQLite-Archiv je Account (WAL-Modus).
 - OMEMO-State und Klartext-Archiv sind getrennt zu halten.
 
-### F6 — Web-UI (Phase 1: nur lesend)
+### F6 — Web-UI: Zugriff und Lesen
 - Eingabe: HTTP-Request (hinter nginx-Reverse-Proxy, extern via traefik `chat.example.com`).
-- Verarbeitung: Auflistung der Gespraechspartner; Anzeige des chronologischen Verlaufs
-  je Partner; Suche/Filter nach Zeitraum und Partner.
-- Ausgabe: HTML-Ansicht der archivierten Nachrichten.
-- Zugriffsschutz: Die UI darf nur dem Account-Inhaber zugaenglich sein (Authentifizierung
-  zwingend, da Klartext privater Nachrichten). Konkretes Verfahren in der Implementierung
-  festzulegen (mind. Passwortschutz; bevorzugt vor traefik/nginx terminiert).
+- Zugriffsschutz: Die UI ist nur nach Login mit gueltigen XMPP-Zugangsdaten zugaenglich
+  (Cookie-Session). Jeder Nutzer sieht ausschliesslich sein eigenes Archiv. Da Klartext
+  privater Nachrichten verarbeitet wird, ist die Authentifizierung zwingend.
+- Verarbeitung/Ausgabe: Auflistung der Gespraechspartner (mit Vorschau, letzter Aktivitaet,
+  Ungelesen-Markierung); chronologischer Verlauf je Partner; Senden, Suche, Verwaltung
+  (siehe folgende F).
 
-### F7 — Nachrichten senden (umgesetzt)
+### F7 — Nachrichten senden
 - Aus der Web-UI koennen Nachrichten gesendet werden (Antwort oder neue Konversation).
 - Da nur der Daemon XMPP-Verbindung und OMEMO-State haelt, schreibt die Web-UI einen
   Sendeauftrag in die Outbox-Tabelle; ein Daemon-Task holt die Empfaenger-Geraeteliste,
   verschluesselt (OMEMO), sendet und archiviert die Nachricht als 'out'.
-- Fehlerverhalten: Schlaegt die Verschluesselung/Sendung fehl, wird der Outbox-Eintrag
-  als 'error' markiert (Kurzfehler ohne Inhalt), der Daemon laeuft weiter.
+- Fehlerverhalten: Schlaegt Verschluesselung/Sendung fehl, wird der Outbox-Eintrag als
+  'error' markiert (Kurzfehler ohne Inhalt), der Daemon laeuft weiter.
 
 ### F8 — Live-Aktualisierung und Lesezustand
 - Die Web-UI aktualisiert Konversationsliste und Verlauf per Polling (JSON-Endpunkte),
@@ -98,10 +113,70 @@ Das System besteht aus zwei Prozessen, die sich nur ueber die Datenbank koppeln:
   archiviert. OMEMO wird im MUC nicht verwendet (Firmen-Gruppenchats sind unverschluesselt).
 - Hinweis: Der Daemon ist als Teilnehmer im Raum praesent (eigener Nick).
 
+### F12 — Volltextsuche
+- Suche ueber das gesamte (entschluesselte) Archiv des angemeldeten Nutzers.
+- Ausgabe: Treffer mit Kontext-Snippet, Hervorhebung des Suchbegriffs und Sprung zur
+  jeweiligen Konversation.
+
+### F13 — Antworten auf eine Nachricht (Zitat)
+- Zu einer einzelnen Nachricht kann gezielt geantwortet werden; der Composer zeigt eine
+  Zitat-Vorschau. Beim Senden wird das Zitat als vorangestellte „> "-Zeilen uebertragen
+  (von jedem Client verstanden, OMEMO-kompatibel) und in der UI als eigener Block
+  dargestellt. Mehrzeilige Nachrichten bleiben erhalten.
+
+### F14 — OMEMO-Verifizierung (Fingerprints)
+- Je 1:1-Kontakt zeigt eine Sicherheitsseite die OMEMO-Geraete mit Fingerprint und
+  Trust-Status (eigene Geraete und die des Kontakts), daemon-seitig geholt.
+- Geraete des Kontakts koennen als verifiziert markiert oder gesperrt werden; die
+  Aenderung erfolgt ueber den Daemon (set_trust) und wirkt auf die OMEMO-Sitzungen.
+
+### F15 — Paginierung und MAM-Nachladen (nur auf Klick)
+- Die Chat-Ansicht laedt nur die letzten 50 Nachrichten (Keyset nach Zeit/ID) und oeffnet
+  damit auch bei zehntausenden Nachrichten sofort.
+- „Aeltere anzeigen" haengt zunaechst lokal vorhandene aeltere Nachrichten seitenweise an
+  (Scrollposition bleibt erhalten).
+- Sind lokal keine aelteren mehr vorhanden, kann der Server-Verlauf (MAM, XEP-0313) auf
+  Klick nachgeladen werden: Der Daemon fragt ein 30-Tage-Fenster vor dem bisher aeltesten
+  Stand des Ziels an. Es gibt **kein** automatisches MAM-Nachladen.
+- MAM-Ergebnisse werden vor der Entschluesselung dedupliziert, um den Double-Ratchet-State
+  nicht durch bereits bekannte Nachrichten zu stoeren.
+
+### F16 — Online-Schalter je Account
+- In der App-Bar laesst sich der „Immer-online"-Zustand des eigenen Accounts umschalten;
+  der Status wird live angezeigt. Die Hintergrund-Archivierung des Accounts laeuft
+  unabhaengig von der Web-Session weiter, solange der Account aktiviert ist.
+
+### F17 — Darstellung und Bedien-Ergonomie (clientseitig)
+- Umschaltbare Ansicht (Liste/Raster) inkl. Spaltenzahl und Zeilen-Vorschau im Raster.
+- Design-Umschalter: Modus (Auto/Hell/Dunkel), Akzentfarbe, Dichte, Sortierung der
+  Chats (Aktivitaet/Ungelesen/Name). Einstellungen werden pro Browser in localStorage
+  gehalten und vor dem ersten Rendern angewandt.
+- Relative Zeitangabe ("gerade eben", "vor X Min/Std", "gestern", "vor X Tagen") vor dem
+  absoluten Zeitstempel der letzten Nachricht; clientseitig laufend aktualisiert.
+- **Minimieren** einer Kachel: legt sie in eine kompakte Ablage; eine neue Nachricht klappt
+  sie automatisch wieder auf. Auswahl pro Browser gespeichert.
+- **Schliessen** einer Kachel: blendet die Konversation dauerhaft aus — auch bei neuen
+  Nachrichten. Die archivierten Daten bleiben erhalten; Wiederherstellen ueber den Bereich
+  „Geschlossene Chats" oder durch direktes Oeffnen des Chats. Minimieren und Schliessen
+  schliessen sich gegenseitig aus.
+- Nicht entschluesselbare Nachrichten werden inline gekennzeichnet; es entsteht **kein**
+  dauerhaftes, nicht aufloesbares Alarm-Zaehlerbadge in der Chatliste.
+
+### F18 — Installierbar (App-Icon / Vollbild)
+- Die Web-UI liefert ein Web-App-Manifest und Icons, sodass sie auf dem Geraet
+  installierbar ist und im Vollbild (standalone) startet.
+- Bewusst **ohne** Service Worker und **ohne** Push-Benachrichtigungen.
+
 ## Nicht-funktionale Anforderungen
 
-- **Idempotenz:** Mehrfachzustellung (Carbons/Direktnachricht) darf keine Duplikate erzeugen.
-- **Verfuegbarkeit:** Daemon laeuft als systemd-Service mit automatischem Reconnect/Restart.
+- **Mandantentrennung:** Je Account ein eigenes Archiv; ein Nutzer hat ausschliesslich
+  Zugriff auf seine eigenen Daten.
+- **Vertraulichkeit der Zugangsdaten:** XMPP-Passwoerter werden ruhend verschluesselt
+  gespeichert (Fernet); der Schluessel liegt nur in `config.yaml` (Rechte 0600).
+- **Idempotenz:** Mehrfachzustellung (Carbons/Direktnachricht) und MAM-Nachladen duerfen
+  keine Duplikate erzeugen.
+- **Verfuegbarkeit:** Daemon/Manager und Web laufen als systemd-Services mit automatischem
+  Reconnect/Restart.
 - **Logging:** Wesentliche Schritte werden geloggt — ohne Klartext-Inhalte, Passwoerter
   oder Schluesselmaterial. Audit-relevant: Verbindungsstatus, Geraete-Trust-Entscheidungen,
   Entschluesselungsfehler.
@@ -112,11 +187,15 @@ Das System besteht aus zwei Prozessen, die sich nur ueber die Datenbank koppeln:
 
 - **Kein OMEMO in Gruppenraeumen.** Firmen-Gruppenchats sind unverschluesselt; MUC laeuft
   daher im Klartext. OMEMO-MUC ist ausgeschlossen.
-- **Kein serverseitiger Eingriff** auf `xmpp.example.com` (nur User-Zugang vorhanden) — kein
-  MAM-Modul, keine Server-Konfiguration.
-- **Kein rueckwirkendes Archiv.** Nachrichten vor Inbetriebnahme des Daemons sind
-  technisch nicht entschluesselbar.
+- **Kein serverseitiger Eingriff** auf `xmpp.example.com` (nur User-Zugang vorhanden): keine
+  Server-Konfiguration, kein eigenes MAM-Modul. MAM wird ausschliesslich als Client-Abfrage
+  (XEP-0313) und nur auf Klick genutzt (siehe F15).
+- **Kein automatisches MAM-Nachladen** (Schutz grosser Raeume vor Massenabfragen).
+- **Kein rueckwirkendes Archiv** vor Inbetriebnahme des Daemon-Geraets: Forward Secrecy
+  macht aeltere OMEMO-Nachrichten technisch nicht entschluesselbar (MAM liefert sie ggf.,
+  aber nicht entschluesselbar).
 - **Keine Garantie auf Vollstaendigkeit** bei manuell verifizierten Gegenstellen, bis diese
   dem Archiv-Geraet vertrauen.
 - **Keine Datei-/Medienanhaenge** (XEP-0454 OMEMO-Media).
+- **Keine Push-Benachrichtigungen / kein Service Worker.**
 - **Keine Praesenz-/Tipp-Anzeigen**, keine Lesebestaetigungen nach aussen.
