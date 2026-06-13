@@ -323,6 +323,25 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .swatch:hover { transform: scale(1.08); }
 .swatch.active { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--sw); }
 
+/* "Spalten" nur im Raster-Modus anzeigen. */
+:root:not([data-view="grid"]) [data-grid-only] { display: none; }
+
+/* --- Raster-Ansicht der Listen (Chats / Kontakte / Raeume) -------------- */
+:root[data-view="grid"] .list {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+}
+:root[data-view="grid"][data-cols="2"] .list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:root[data-view="grid"][data-cols="3"] .list { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+:root[data-view="grid"][data-cols="4"] .list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+/* Auf schmalen Schirmen feste Spaltenzahlen auf 1 reduzieren. */
+@media (max-width: 640px) {
+  :root[data-view="grid"][data-cols="2"] .list,
+  :root[data-view="grid"][data-cols="3"] .list,
+  :root[data-view="grid"][data-cols="4"] .list { grid-template-columns: 1fr; }
+}
+
 /* --- Online-Toggle in der App-Bar --------------------------------------- */
 .online-form { margin: 0 0 0 14px; }
 .online-btn {

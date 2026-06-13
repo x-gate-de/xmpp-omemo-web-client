@@ -53,6 +53,22 @@
             <button type="button" class="swatch" data-accent-set="teal" style="--sw:#0d9488" title="Tuerkis" aria-label="Tuerkis"></button>
           </div>
         </div>
+        <div class="design-row">
+          <span class="design-label">Ansicht</span>
+          <div class="design-opts">
+            <button type="button" class="design-mode" data-view-set="list">Liste</button>
+            <button type="button" class="design-mode" data-view-set="grid">Raster</button>
+          </div>
+        </div>
+        <div class="design-row" data-grid-only>
+          <span class="design-label">Spalten</span>
+          <div class="design-opts">
+            <button type="button" class="design-mode" data-cols-set="auto">Auto</button>
+            <button type="button" class="design-mode" data-cols-set="2">2</button>
+            <button type="button" class="design-mode" data-cols-set="3">3</button>
+            <button type="button" class="design-mode" data-cols-set="4">4</button>
+          </div>
+        </div>
       </div>
     </details>
     {% if account_jid %}
