@@ -263,6 +263,38 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .icon-btn:hover { background: var(--primary-hover); }
 .icon-btn:active { transform: scale(.94); }
 
+/* --- Antwort / Zitat ----------------------------------------------------- */
+.msg { position: relative; }
+.msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.msg-quote {
+  display: block; border-left: 3px solid color-mix(in srgb, currentColor 40%, transparent);
+  padding: 1px 0 1px 8px; margin-bottom: 4px; font-size: 0.9em; opacity: .8;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.reply-btn {
+  position: absolute; top: 3px; width: 26px; height: 26px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface); color: var(--muted);
+  display: grid; place-items: center; cursor: pointer; box-shadow: var(--shadow);
+  opacity: 0; transition: opacity .12s ease;
+}
+.row.in .reply-btn { right: -34px; }
+.row.out .reply-btn { left: -34px; }
+.msg:hover .reply-btn { opacity: 1; }
+.reply-btn:hover { color: var(--primary); border-color: var(--primary); }
+
+.composer { flex-direction: column; align-items: stretch; gap: 8px; }
+.composer-row { display: flex; gap: 9px; align-items: center; }
+.reply-preview {
+  display: flex; align-items: center; gap: 10px; background: var(--surface-2);
+  border-left: 3px solid var(--primary); border-radius: 8px; padding: 7px 11px;
+}
+.reply-preview[hidden] { display: none; }
+.reply-preview-body { min-width: 0; flex: 1; }
+.reply-preview-who { display: block; font-size: 0.74rem; font-weight: 700; color: var(--primary); }
+.reply-preview-text { display: block; font-size: 0.85rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reply-cancel { border: 0; background: transparent; color: var(--muted); font-size: 1.35rem; line-height: 1; cursor: pointer; padding: 0 4px; }
+.reply-cancel:hover { color: var(--fg); }
+
 /* --- Buttons / Formulare ------------------------------------------------- */
 .newconv { display: flex; gap: 9px; margin-bottom: 16px; }
 .newconv input[type=text] {

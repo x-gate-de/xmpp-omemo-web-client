@@ -27,7 +27,8 @@
     <div class="row {{ m.direction }}" data-id="{{ m.id }}" data-ts="{{ m.ts }}">
       <div class="msg">
         {% if m.sender and m.direction == 'in' %}<span class="sender">{{ m.sender }}</span>{% endif %}
-        {% if m.decrypted %}{{ m.body }}{% else %}<span class="undec">[nicht entschluesselbar]</span>{% endif %}
+        {% if m.decrypted %}{% if m.quote %}<span class="msg-quote">{{ m.quote }}</span>{% endif %}<span class="msg-text">{{ m.text }}</span>{% else %}<span class="undec">[nicht entschluesselbar]</span>{% endif %}
+        {% if m.decrypted and m.text %}<button type="button" class="reply-btn" data-quote="{{ m.text }}" data-who="{% if m.sender %}{{ m.sender }}{% elif m.direction == 'out' %}Du{% else %}{{ name }}{% endif %}" title="Antworten" aria-label="Antworten"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></button>{% endif %}
         <span class="meta">
           <span>{{ m.ts }}</span>
           {% if m.direction == 'out' %}
@@ -54,10 +55,20 @@
 </div>
 
 <form class="composer" method="post" action="/c/{{ partner }}/send">
-  <input type="text" name="body" placeholder="Nachricht schreiben …" autocomplete="off" autofocus required aria-label="Nachricht">
-  <button class="icon-btn" type="submit" aria-label="Senden">
-    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-  </button>
+  <div class="reply-preview" id="reply-preview" hidden>
+    <div class="reply-preview-body">
+      <span class="reply-preview-who" id="reply-who"></span>
+      <span class="reply-preview-text" id="reply-text"></span>
+    </div>
+    <button type="button" class="reply-cancel" id="reply-cancel" title="Antwort abbrechen" aria-label="Antwort abbrechen">&times;</button>
+  </div>
+  <div class="composer-row">
+    <input type="hidden" name="quote" id="reply-quote" value="">
+    <input type="text" name="body" placeholder="Nachricht schreiben …" autocomplete="off" autofocus required aria-label="Nachricht">
+    <button class="icon-btn" type="submit" aria-label="Senden">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+    </button>
+  </div>
 </form>
 {% endblock %}
 {% block scripts %}<script src="/static/app.js?v={{ asset_ver }}"></script>{% endblock %}
