@@ -222,6 +222,64 @@
     setInterval(refreshOnline, 3000);
   }
 
+  // OMEMO-Geraete / Verifizierung
+  var contactDevices = document.getElementById("contact-devices");
+  if (contactDevices) {
+    var devPartner = contactDevices.getAttribute("data-partner");
+    var TRUST = {
+      verified: { label: "Verifiziert", cls: "ok" },
+      trusted: { label: "Vertraut (blind)", cls: "muted" },
+      undecided: { label: "Unbestaetigt", cls: "warn" },
+      distrusted: { label: "Gesperrt", cls: "bad" }
+    };
+    function devBtn(d, value, label, cls) {
+      var b = el("button", cls, label); b.type = "button";
+      b.addEventListener("click", function () {
+        b.disabled = true;
+        fetch("/devices/" + encodeURIComponent(devPartner) + "/trust", {
+          method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: "identity_hex=" + encodeURIComponent(d.identity_hex) + "&value=" + value
+        }).then(function () { setTimeout(loadDevices, 1500); }).catch(function () { b.disabled = false; });
+      });
+      return b;
+    }
+    function devCard(d) {
+      var card = el("div", "dev-card");
+      var head = el("div", "dev-head");
+      head.appendChild(el("span", "dev-id", "Geraet " + d.device_id));
+      var t = TRUST[d.trust] || TRUST.undecided;
+      head.appendChild(el("span", "dev-trust " + t.cls, t.label));
+      card.appendChild(head);
+      card.appendChild(el("div", "dev-fp", d.fingerprint || ""));
+      if (!d.is_own) {
+        var actions = el("div", "dev-actions");
+        if (d.trust !== "verified") actions.appendChild(devBtn(d, "verify", "Verifizieren", "btn"));
+        if (d.trust !== "distrusted") actions.appendChild(devBtn(d, "distrust", "Sperren", "btn ghost"));
+        card.appendChild(actions);
+      }
+      return card;
+    }
+    function loadDevices() {
+      fetch("/api/devices/" + encodeURIComponent(devPartner), { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (devs) {
+          if (!devs) return;
+          var own = document.getElementById("own-devices");
+          own.textContent = ""; contactDevices.textContent = "";
+          var o = [], c = [], i;
+          for (i = 0; i < devs.length; i++) { (devs[i].is_own ? o : c).push(devs[i]); }
+          if (!o.length) own.appendChild(el("p", "dev-loading", "—"));
+          for (i = 0; i < o.length; i++) own.appendChild(devCard(o[i]));
+          if (!c.length) contactDevices.appendChild(el("p", "dev-loading", "Noch keine Geraete geladen (Aktualisierung laeuft) …"));
+          for (i = 0; i < c.length; i++) contactDevices.appendChild(devCard(c[i]));
+        }).catch(function () {});
+    }
+    loadDevices();
+    var devTries = 0;
+    var devTimer = setInterval(function () { devTries++; loadDevices(); if (devTries >= 6) clearInterval(devTimer); }, 2500);
+  }
+
   var box = document.getElementById("messages");
   var list = document.getElementById("conv-list");
   if (box) {

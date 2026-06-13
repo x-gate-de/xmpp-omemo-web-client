@@ -295,6 +295,24 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .reply-cancel { border: 0; background: transparent; color: var(--muted); font-size: 1.35rem; line-height: 1; cursor: pointer; padding: 0 4px; }
 .reply-cancel:hover { color: var(--fg); }
 
+/* --- Sicherheit / OMEMO-Geraete ----------------------------------------- */
+.conv-head .who { flex: 1; }
+.conv-shield { margin: 0; }
+.dev-hint { color: var(--muted); font-size: 0.88rem; margin: 0 2px 8px; line-height: 1.5; }
+.dev-list { display: flex; flex-direction: column; gap: 8px; }
+.dev-loading { color: var(--muted); font-size: 0.88rem; margin: 2px; }
+.dev-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; box-shadow: var(--shadow); }
+.dev-head { display: flex; align-items: center; gap: 10px; margin-bottom: 7px; }
+.dev-id { font-weight: 600; }
+.dev-trust { margin-left: auto; font-size: 0.76rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
+.dev-trust.ok { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+.dev-trust.muted { background: var(--surface-2); color: var(--muted); }
+.dev-trust.warn { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #d97706; }
+.dev-trust.bad { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
+.dev-fp { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.82rem; color: var(--muted); word-break: break-all; line-height: 1.6; }
+.dev-actions { display: flex; gap: 8px; margin-top: 10px; }
+.dev-actions .btn { font-size: 0.82rem; padding: 6px 13px; }
+
 /* --- Buttons / Formulare ------------------------------------------------- */
 .newconv { display: flex; gap: 9px; margin-bottom: 16px; }
 .newconv input[type=text] {

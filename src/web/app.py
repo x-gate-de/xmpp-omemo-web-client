@@ -526,6 +526,57 @@ def send_message(partner: str, body: str = Form(...), quote: str = Form(""), acc
     return RedirectResponse(url=f"/c/{partner}", status_code=status.HTTP_303_SEE_OTHER)
 
 
+# --- OMEMO-Geraete / Verifizierung ------------------------------------------
+
+def _devices(db_path, partner):
+    conn = _open_ro(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT jid, device_id, fingerprint, identity_hex, trust, is_own, label FROM omemo_devices "
+            "WHERE jid = ? OR is_own = 1 ORDER BY is_own DESC, device_id",
+            (partner,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [{"jid": r["jid"], "device_id": r["device_id"], "fingerprint": r["fingerprint"],
+             "identity_hex": r["identity_hex"], "trust": r["trust"], "is_own": bool(r["is_own"]),
+             "label": r["label"]} for r in rows]
+
+
+def _omemo_request_row(db_path, action, jid, identity_hex=None, trust_value=None):
+    conn = _open_rw(db_path)
+    try:
+        conn.execute(
+            "INSERT INTO omemo_requests (action, jid, identity_hex, trust_value, status, created_ts) "
+            "VALUES (?, ?, ?, ?, 'pending', ?)",
+            (action, jid, identity_hex, trust_value, time.time()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+@app.get("/devices/{partner:path}", response_class=HTMLResponse)
+def devices(partner: str, acc: dict = Depends(require_account)):
+    _omemo_request_row(acc["archive_path"], "refresh", partner)  # frische Daten anstossen
+    return _env.get_template("devices.html").render(
+        partner=partner, nav_active="", account_jid=acc["jid"], account_state=_account_state(acc["jid"]),
+    )
+
+
+@app.get("/api/devices/{partner:path}")
+def api_devices(partner: str, acc: dict = Depends(require_account)):
+    return _devices(acc["archive_path"], partner)
+
+
+@app.post("/devices/{partner:path}/trust")
+def devices_trust(partner: str, identity_hex: str = Form(...), value: str = Form(...),
+                  acc: dict = Depends(require_account)):
+    if value in ("verify", "distrust") and identity_hex:
+        _omemo_request_row(acc["archive_path"], "trust", partner, identity_hex=identity_hex, trust_value=value)
+    return JSONResponse({"ok": True})
+
+
 # Fordert das Nachladen aelterer Nachrichten (MAM) fuer diese Konversation/diesen Raum an.
 @app.post("/c/{partner:path}/loadmore")
 def load_more(partner: str, acc: dict = Depends(require_account)):
