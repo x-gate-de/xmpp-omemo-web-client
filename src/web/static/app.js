@@ -1,10 +1,12 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.2.0
+// Version: 1.3.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
+// - Minimieren/Wiederoeffnen von Konversationskacheln (lokal gespeichert);
+//   eine neue Nachricht klappt eine minimierte Kachel automatisch wieder auf.
 // Hinweis:
 // - Nutzerinhalte werden ueber textContent eingefuegt (XSS-Schutz). SVG-Icons
 //   stammen aus statischen Markup-Konstanten, nicht aus Nutzerdaten.
@@ -35,6 +37,25 @@
     var a = el("span", "avatar" + (room ? " room" : ""), initials);
     a.style.setProperty("--h", hue);
     return a;
+  }
+
+  // Minimierte (geschlossene) Konversationen: Map partner -> last_ts beim Schliessen.
+  // Persistiert in localStorage, damit die Auswahl Reloads ueberlebt. Trifft spaeter
+  // eine neuere Nachricht ein (groesseres last_ts), klappt die Kachel automatisch
+  // wieder auf -- so geht kein Eingang verloren, nur der Platz wird freigeraeumt.
+  function getCollapsed() {
+    try { return JSON.parse(localStorage.getItem("collapsed") || "{}") || {}; } catch (e) { return {}; }
+  }
+  function setCollapsed(map) {
+    try { localStorage.setItem("collapsed", JSON.stringify(map)); } catch (e) {}
+  }
+  function collapseConv(partner, ts) {
+    var m = getCollapsed(); m[partner] = ts || 0; setCollapsed(m);
+    if (listRefresh) listRefresh();
+  }
+  function expandConv(partner) {
+    var m = getCollapsed(); delete m[partner]; setCollapsed(m);
+    if (listRefresh) listRefresh();
   }
 
   // Archivierte Nachrichtenblase.
@@ -82,6 +103,20 @@
 
   var SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
   var REPLY_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>';
+  var MIN_ICON = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+
+  // Kompakter Platzhalter fuer eine minimierte Konversation: Klick oeffnet sie wieder.
+  function renderConvChip(it) {
+    var chip = document.createElement("button");
+    chip.type = "button"; chip.className = "conv-chip";
+    chip.title = "Wieder oeffnen: " + it.name;
+    chip.appendChild(avatar(it.initials, it.hue, it.is_room));
+    chip.appendChild(el("span", "chip-name", it.name));
+    if (it.unread) chip.appendChild(el("span", "pill unread", String(it.unread)));
+    chip.addEventListener("click", function () { expandConv(it.partner); });
+    return chip;
+  }
+
   function renderConvRow(it) {
     var tile = el("div", "list-row conv-tile" + (it.unread ? " has-unread" : ""));
     var a = el("a", "conv-open"); a.href = "/c/" + it.partner;
@@ -103,6 +138,16 @@
     }
     a.appendChild(main);
     tile.appendChild(a);
+    // Minimieren-Knopf (raeumt die Kachel weg, ohne Inhalt zu verlieren).
+    var minBtn = document.createElement("button");
+    minBtn.type = "button"; minBtn.className = "tile-min"; minBtn.title = "Minimieren";
+    minBtn.setAttribute("aria-label", "Konversation minimieren");
+    minBtn.appendChild(icon(MIN_ICON));
+    minBtn.addEventListener("click", function (e) {
+      e.preventDefault(); e.stopPropagation();
+      collapseConv(it.partner, it.last_ts || 0);
+    });
+    tile.appendChild(minBtn);
     // Antwort direkt aus der Kachel.
     var form = document.createElement("form");
     form.className = "tile-compose"; form.method = "post"; form.action = "/c/" + it.partner + "/send";
@@ -141,8 +186,29 @@
         var ae = document.activeElement;
         if (ae && ae.closest && ae.closest("#conv-list .tile-compose")) return;
         items = sortItems(items);
+        // Minimierte herausfiltern; eine seither neuere Nachricht klappt automatisch auf.
+        var collapsed = getCollapsed();
+        var dirty = false, visible = [], hidden = [];
+        items.forEach(function (it) {
+          var marker = collapsed[it.partner];
+          if (marker != null && !(it.last_ts > marker)) {
+            hidden.push(it);
+          } else {
+            if (marker != null) { delete collapsed[it.partner]; dirty = true; }
+            visible.push(it);
+          }
+        });
+        if (dirty) setCollapsed(collapsed);
         list.textContent = "";
-        items.forEach(function (it) { list.appendChild(renderConvRow(it)); });
+        visible.forEach(function (it) { list.appendChild(renderConvRow(it)); });
+        if (hidden.length) {
+          var tray = el("div", "collapsed-tray");
+          tray.appendChild(el("span", "tray-label", "Minimiert (" + hidden.length + ")"));
+          var chips = el("div", "tray-chips");
+          hidden.forEach(function (it) { chips.appendChild(renderConvChip(it)); });
+          tray.appendChild(chips);
+          list.appendChild(tray);
+        }
         var hint = document.getElementById("empty-hint");
         if (hint) hint.style.display = items.length ? "none" : "";
       })
@@ -403,8 +469,9 @@
     }
   } else if (list) {
     listRefresh = function () { pollList(list); };
-    // Bei gespeicherter Nicht-Standard-Sortierung sofort umsortieren (Server liefert Aktivitaet).
-    if ((document.documentElement.getAttribute("data-sort") || "activity") !== "activity") listRefresh();
+    // Sofort per JS rendern: bringt Minimieren-Knoepfe und die "Minimiert"-Ablage und
+    // wendet gespeicherte Sortierung sowie minimierte Kacheln direkt an.
+    listRefresh();
     setInterval(listRefresh, 5000);
 
     // Antworten direkt aus der Kachel (ohne Seitenwechsel), per Delegation.

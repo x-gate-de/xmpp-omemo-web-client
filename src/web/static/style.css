@@ -426,7 +426,7 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .conv-recent .cr-line.out { color: color-mix(in srgb, var(--fg) 55%, var(--muted)); }
 
 /* --- Konversations-Kachel mit eigenem Antwortfeld ----------------------- */
-.conv-tile { flex-direction: column; align-items: stretch; }
+.conv-tile { position: relative; flex-direction: column; align-items: stretch; }
 .conv-open { display: flex; align-items: center; gap: 13px; min-width: 0; flex: 1; text-decoration: none; color: inherit; }
 .conv-tile:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
 .conv-open:hover .row-name { color: var(--primary); }
@@ -449,6 +449,37 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 :root[data-lines="4"] { --conv-lines: 4; }
 :root[data-lines="6"] { --conv-lines: 6; }
 :root[data-lines="8"] { --conv-lines: 8; }
+
+/* --- Minimieren / Wiederoeffnen von Kacheln ----------------------------- */
+.tile-min {
+  position: absolute; top: 8px; right: 8px; width: 26px; height: 26px;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--surface);
+  color: var(--muted); display: grid; place-items: center; cursor: pointer; opacity: 0;
+  transition: opacity .14s ease, color .14s ease, border-color .14s ease, background .14s ease;
+}
+.conv-tile:hover .tile-min, .tile-min:focus-visible { opacity: 1; }
+.tile-min:hover { color: var(--fg); border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); background: var(--bg); }
+/* Auf Touch-Geraeten (kein Hover) den Knopf dauerhaft sichtbar halten. */
+@media (hover: none) { .tile-min { opacity: .65; } }
+
+.collapsed-tray {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin-top: 6px; padding: 10px 12px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+:root[data-view="grid"] .collapsed-tray { grid-column: 1 / -1; }
+.tray-label { font-size: 0.76rem; font-weight: 600; color: var(--muted); margin-right: 2px; }
+.tray-chips { display: flex; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.conv-chip {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 220px;
+  padding: 5px 11px 5px 5px; border: 1px solid var(--border); border-radius: 999px;
+  background: var(--bg); color: inherit; cursor: pointer; font: inherit;
+  transition: border-color .14s ease, transform .14s ease;
+}
+.conv-chip:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--primary) 45%, var(--border)); }
+.conv-chip .avatar { width: 26px; height: 26px; font-size: 0.7rem; }
+.conv-chip .chip-name { font-size: 0.84rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 
 /* --- Ungelesene Konversationen hervorheben ------------------------------ */
 .list-row.has-unread { border-color: color-mix(in srgb, var(--primary) 50%, var(--border)); }

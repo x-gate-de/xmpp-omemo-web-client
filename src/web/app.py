@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.0.0
+# Version: 2.1.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -246,6 +246,7 @@ def _conv_items(db_path):
             name = r["contact_name"] or r["room_name"] or r["partner"]
             items.append({
                 "partner": r["partner"], "name": name, "count": r["cnt"], "last": _fmt_ts(r["last_ts"]),
+                "last_ts": r["last_ts"],
                 "undecrypted": r["undecrypted"], "unread": r["unread"], "is_room": is_room,
                 "preview": _preview(r["last_body"], r["last_dir"], r["last_dec"]),
                 "initials": _initials(name if name != r["partner"] else "", r["partner"]),
