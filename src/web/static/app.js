@@ -89,9 +89,10 @@
       .catch(function () {});
   }
 
+  var SEND_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>';
   function renderConvRow(it) {
-    var a = el("a", "list-row" + (it.unread ? " has-unread" : ""));
-    a.href = "/c/" + it.partner;
+    var tile = el("div", "list-row conv-tile" + (it.unread ? " has-unread" : ""));
+    var a = el("a", "conv-open"); a.href = "/c/" + it.partner;
     a.appendChild(avatar(it.initials, it.hue, it.is_room));
     var main = el("span", "row-main");
     var top = el("span", "row-top");
@@ -110,7 +111,18 @@
       main.appendChild(rec);
     }
     a.appendChild(main);
-    return a;
+    tile.appendChild(a);
+    // Antwort direkt aus der Kachel.
+    var form = document.createElement("form");
+    form.className = "tile-compose"; form.method = "post"; form.action = "/c/" + it.partner + "/send";
+    var input = document.createElement("input");
+    input.type = "text"; input.name = "body"; input.placeholder = "Antwort …"; input.autocomplete = "off";
+    input.setAttribute("aria-label", "Antwort");
+    var btn = document.createElement("button"); btn.type = "submit"; btn.setAttribute("aria-label", "Senden");
+    btn.appendChild(icon(SEND_ICON));
+    form.appendChild(input); form.appendChild(btn);
+    tile.appendChild(form);
+    return tile;
   }
 
   // Sortiert die Konversationen nach der gewaehlten Einstellung. JS-sort ist stabil,
@@ -134,6 +146,9 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (items) {
         if (!items) return;
+        // Nicht neu aufbauen, waehrend in einer Kachel eine Antwort getippt wird.
+        var ae = document.activeElement;
+        if (ae && ae.closest && ae.closest("#conv-list .tile-compose")) return;
         items = sortItems(items);
         list.textContent = "";
         items.forEach(function (it) { list.appendChild(renderConvRow(it)); });
@@ -226,5 +241,25 @@
     // Bei gespeicherter Nicht-Standard-Sortierung sofort umsortieren (Server liefert Aktivitaet).
     if ((document.documentElement.getAttribute("data-sort") || "activity") !== "activity") listRefresh();
     setInterval(listRefresh, 5000);
+
+    // Antworten direkt aus der Kachel (ohne Seitenwechsel), per Delegation.
+    list.addEventListener("submit", function (e) {
+      var form = e.target;
+      if (!form.classList || !form.classList.contains("tile-compose")) return;
+      e.preventDefault();
+      var input = form.querySelector("input[name=body]");
+      var text = input ? input.value.trim() : "";
+      if (!text) return;
+      fetch(form.action, {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: "body=" + encodeURIComponent(text)
+      }).then(function () {
+        // Optimistisch sofort anzeigen; der Daemon versendet und archiviert im Hintergrund.
+        var rec = form.parentNode.querySelector(".conv-recent");
+        if (rec) rec.appendChild(el("span", "cr-line out", "Du: " + text));
+        if (input) input.value = "";
+      }).catch(function () {});
+    });
   }
 })();
