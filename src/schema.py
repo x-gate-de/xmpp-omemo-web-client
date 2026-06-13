@@ -86,6 +86,33 @@ def ensure_schema(conn):
         ")"
     )
 
+    # OMEMO-Geraete je JID (vom Daemon gefuellt) fuer Fingerprint-Anzeige/Verifizierung.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS omemo_devices ("
+        "  jid TEXT NOT NULL,"
+        "  device_id INTEGER NOT NULL,"
+        "  fingerprint TEXT,"            # gruppiert, zur Anzeige
+        "  identity_hex TEXT,"          # roh (fuer set_trust)
+        "  trust TEXT,"
+        "  is_own INTEGER NOT NULL DEFAULT 0,"
+        "  label TEXT,"
+        "  updated_ts REAL,"
+        "  PRIMARY KEY (jid, device_id)"
+        ")"
+    )
+    # Anfragen der Web-UI an den Daemon: Geraete aktualisieren / Trust setzen.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS omemo_requests ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  action TEXT NOT NULL,"        # 'refresh' | 'trust'
+        "  jid TEXT NOT NULL,"
+        "  identity_hex TEXT,"
+        "  trust_value TEXT,"
+        "  status TEXT NOT NULL DEFAULT 'pending',"
+        "  created_ts REAL NOT NULL"
+        ")"
+    )
+
     # Roster-Kontakte (vom Daemon gepflegt) - Quelle der Userliste.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS contacts ("

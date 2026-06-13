@@ -88,6 +88,35 @@ class MessageArchive:
         ).fetchone()
         return row[0] if row and row[0] is not None else None
 
+    # --- OMEMO-Geraete / Verifizierung --------------------------------------
+
+    def claim_pending_omemo(self):
+        rows = self._conn.execute(
+            "SELECT id, action, jid, identity_hex, trust_value FROM omemo_requests WHERE status = 'pending' ORDER BY id"
+        ).fetchall()
+        return [(r[0], r[1], r[2], r[3], r[4]) for r in rows]
+
+    def mark_omemo_done(self, req_id, ok=True):
+        self._conn.execute(
+            "UPDATE omemo_requests SET status = ? WHERE id = ?", ("done" if ok else "error", req_id)
+        )
+        self._conn.commit()
+
+    # Ersetzt die Geraeteliste fuer die in rows vorkommenden JIDs.
+    def set_omemo_devices(self, rows):
+        jids = set(r["jid"] for r in rows)
+        for j in jids:
+            self._conn.execute("DELETE FROM omemo_devices WHERE jid = ?", (j,))
+        now = time.time()
+        self._conn.executemany(
+            "INSERT OR REPLACE INTO omemo_devices "
+            "(jid, device_id, fingerprint, identity_hex, trust, is_own, label, updated_ts) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [(r["jid"], r["device_id"], r["fingerprint"], r["identity_hex"], r["trust"],
+              1 if r["is_own"] else 0, r["label"], now) for r in rows],
+        )
+        self._conn.commit()
+
     # Markiert eine gesendete Nachricht als zugestellt (Empfangsbestaetigung XEP-0184).
     def mark_delivered(self, msg_id):
         self._conn.execute(

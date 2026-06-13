@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Sicherheit - Chat{% endblock %}
+{% block content %}
+<div class="page-title">Sicherheit &middot; {{ partner }}</div>
+<p class="dev-hint">OMEMO-Fingerprints. Vergleiche den Fingerprint mit deinem Gegenueber ueber einen
+  anderen Kanal (z. B. persoenlich/Telefon) und markiere ihn dann als <strong>verifiziert</strong>.
+  Verdaechtige Geraete kannst du <strong>sperren</strong>.</p>
+
+<div class="section-title">Deine Geraete</div>
+<div class="dev-list" id="own-devices"><p class="dev-loading">Lade …</p></div>
+
+<div class="section-title">Geraete von {{ partner }}</div>
+<div class="dev-list" id="contact-devices" data-partner="{{ partner }}"><p class="dev-loading">Lade …</p></div>
+{% endblock %}
+{% block scripts %}<script src="/static/app.js?v={{ asset_ver }}"></script>{% endblock %}

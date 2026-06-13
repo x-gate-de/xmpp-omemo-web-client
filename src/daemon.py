@@ -266,6 +266,9 @@ class ArchiverBot(ClientXMPP):
                 # Anfragen, aeltere Nachrichten per MAM nachzuladen, abarbeiten.
                 for req_id, target, kind in self._archive.claim_pending_mam():
                     await self._backfill(req_id, target, kind)
+                # OMEMO-Geraete-/Verifizierungs-Anfragen abarbeiten.
+                for req_id, action, jid, ihex, tval in self._archive.claim_pending_omemo():
+                    await self._omemo_request(req_id, action, jid, ihex, tval)
             except Exception as e:
                 logger.error("Outbox-Verarbeitung fehlgeschlagen: %s", type(e).__name__)
             await asyncio.sleep(2)
@@ -384,6 +387,57 @@ class ArchiverBot(ClientXMPP):
         if not body:
             return False
         return self._archive.store(target, direction, body, stanza_id, decrypted=True, ts=ts)
+
+    # --- OMEMO-Geraete / Verifizierung --------------------------------------
+
+    def _trust_simple(self, name):
+        if name == TrustLevel.TRUSTED.value:
+            return "verified"
+        if name == TrustLevel.BLINDLY_TRUSTED.value:
+            return "trusted"
+        if name == TrustLevel.DISTRUSTED.value:
+            return "distrusted"
+        return "undecided"
+
+    def _dev_row(self, d, is_own):
+        fp = d.identity_key.hex()
+        grouped = " ".join(fp[i:i + 8] for i in range(0, len(fp), 8))
+        return {"jid": d.bare_jid, "device_id": d.device_id, "fingerprint": grouped,
+                "identity_hex": fp, "trust": self._trust_simple(d.trust_level_name),
+                "is_own": is_own, "label": d.label or ""}
+
+    # Holt eigene + Kontakt-Geraete (Fingerprint + Trust) und legt sie ab.
+    async def _omemo_refresh(self, jid):
+        sm = await self["xep_0384"].get_session_manager()
+        rows = []
+        try:
+            own, own_others = await sm.get_own_device_information()
+            rows.append(self._dev_row(own, True))
+            for d in own_others:
+                rows.append(self._dev_row(d, True))
+        except Exception:
+            pass
+        try:
+            await self["xep_0384"].refresh_device_lists({JID(jid)})
+            for d in await sm.get_device_information(jid):
+                rows.append(self._dev_row(d, False))
+        except Exception:
+            pass
+        if rows:
+            self._archive.set_omemo_devices(rows)
+
+    async def _omemo_request(self, req_id, action, jid, identity_hex, trust_value):
+        try:
+            if action == "trust" and identity_hex and trust_value:
+                level = TrustLevel.TRUSTED.value if trust_value == "verify" else TrustLevel.DISTRUSTED.value
+                sm = await self["xep_0384"].get_session_manager()
+                await sm.set_trust(jid, bytes.fromhex(identity_hex), level)
+                logger.info("OMEMO-Trust gesetzt fuer %s -> %s", jid, trust_value)
+            await self._omemo_refresh(jid)
+            self._archive.mark_omemo_done(req_id, True)
+        except Exception as e:
+            logger.warning("OMEMO-Anfrage (%s) fehlgeschlagen: %s", action, type(e).__name__)
+            self._archive.mark_omemo_done(req_id, False)
 
 
 # Baut den Daemon aus der Konfiguration und liefert die laufbereite Instanz.
