@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.5.0
+// Version: 1.5.1
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -201,6 +201,7 @@
     // Antwort direkt aus der Kachel.
     var form = document.createElement("form");
     form.className = "tile-compose"; form.method = "post"; form.action = "/c/" + it.partner + "/send";
+    form.setAttribute("data-partner", it.partner);
     var input = document.createElement("input");
     input.type = "text"; input.name = "body"; input.placeholder = "Antwort …"; input.autocomplete = "off";
     input.setAttribute("aria-label", "Antwort");
@@ -229,12 +230,24 @@
 
   function pollList(list) {
     fetch("/api/conversations", { credentials: "same-origin" })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) {
+        // Abgelaufene Session -> nicht still einfrieren, sondern zur Anmeldung.
+        if (r.status === 401) { window.location.href = "/login"; return null; }
+        return r.ok ? r.json() : null;
+      })
       .then(function (items) {
         if (!items) return;
-        // Nicht neu aufbauen, waehrend in einer Kachel eine Antwort getippt wird.
+        // Nur pausieren, solange tatsaechlich ein (nicht-leerer) Antwort-Entwurf getippt
+        // wird -- damit das Tile beim Tippen nicht wegspringt. Ein bloss fokussiertes,
+        // leeres Antwortfeld darf die Liste NICHT einfrieren (sonst aktualisiert ein
+        // Tab nie mehr, wenn der Cursor in einem leeren Feld steht).
         var ae = document.activeElement;
-        if (ae && ae.closest && ae.closest("#conv-list .tile-compose")) return;
+        var focusPartner = null;
+        if (ae && ae.closest && ae.closest("#conv-list .tile-compose")) {
+          if ((ae.value || "").trim()) return;
+          var ff = ae.closest(".tile-compose");
+          focusPartner = ff ? ff.getAttribute("data-partner") : null;
+        }
         items = sortItems(items);
         // Geschlossene ganz ausblenden; Minimierte in die Ablage; eine seither neuere
         // Nachricht klappt eine minimierte (nicht: geschlossene) Kachel automatisch auf.
@@ -283,6 +296,12 @@
         }
         var hint = document.getElementById("empty-hint");
         if (hint) hint.style.display = items.length ? "none" : "";
+        // Fokus auf das (leere) Antwortfeld zurueckholen, das vor dem Neuaufbau aktiv war.
+        if (focusPartner) {
+          var sel = '.tile-compose[data-partner="' + focusPartner.replace(/["\\]/g, "\\$&") + '"] input[name=body]';
+          var again = list.querySelector(sel);
+          if (again) again.focus();
+        }
       })
       .catch(function () {});
   }
