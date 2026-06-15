@@ -1,13 +1,19 @@
 # Changelog
 
 ## [Unreleased]
+- Optional: MAM backfill to cover daemon downtime.
+
+## [1.4.0] - 2026-06-15
 - Attachments via drag & drop: drag one or more files into the chat window and drop
   them to send as attachments (1:1 only, same path as the paperclip). With a "drop
   here" overlay and a 30 MB per-file limit.
 - Push polish: the notification title is now the chat/sender name (instead of
   "Chat"). iOS automatically appends "from <app name>", which previously produced
   a redundant "Chat from Chat"; now e.g. "Tom Ziegler / from Chat / New message".
-- Optional: MAM backfill to cover daemon downtime.
+- Sticky conversation header (name/bell/shield) below the app bar, so the push bell
+  stays reachable even in very long threads (no scrolling to the top).
+- Settings menu: tidied the account-deletion entry (trash icon, single-line
+  "Account loeschen"; full wording in the tooltip and on the confirmation page).
 
 ## [1.3.0] - 2026-06-15
 - User guide (German) + help link: step-by-step guide ANLEITUNG.md (login, install
