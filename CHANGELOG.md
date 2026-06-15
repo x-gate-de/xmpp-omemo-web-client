@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- Send attachments (OMEMO media, XEP-0454/0363): you can now send files/images
+  in 1:1 chats (paperclip in the composer; picking a file sends it immediately).
+  Flow: the web UI spools the file and queues a media job; the daemon AES-256-GCM-
+  encrypts it, uploads it via HTTP File Upload (XEP-0363) and sends the aesgcm://
+  URL (key+IV in the fragment) only inside the OMEMO-encrypted body (no cleartext
+  OOB, so the key stays secret). The spool file is then deleted and the message is
+  archived as 'out' (inline display as on receive). New dependency: aiohttp
+  (needed by slixmpp for the upload). nginx: client_max_body_size 32m (default is
+  1 MB); web limit 30 MB. 1:1 only (OMEMO); not in plaintext group rooms.
 - Display attachments (OMEMO media, XEP-0454): images from 1:1 chats arrive as
   `aesgcm://` links (the file is AES-256-GCM-encrypted on the HTTP upload server,
   key+IV in the URL fragment). A new decrypting media proxy `/media/{msg_id}`
@@ -45,7 +54,6 @@
   Click the chip to reopen. A new incoming message (detected via `last_ts`)
   re-expands the tile automatically. The selection is stored per browser in
   localStorage.
-- Optional: file attachments (OMEMO media, XEP-0454).
 - Optional: MAM backfill to cover daemon downtime.
 - Optional: account deletion (remove stored credentials + archive).
 

@@ -13,6 +13,9 @@
 # XMPP-Core (asyncio)
 slixmpp==1.16.0
 
+# HTTP File Upload (XEP-0363) - von slixmpp fuer Anhang-Uploads benoetigt
+aiohttp==3.14.1
+
 # OMEMO (XEP-0384) Plugin fuer slixmpp + Krypto-Unterbau (Syndace-Familie)
 slixmpp-omemo==2.2.0
 OMEMO==2.1.0
