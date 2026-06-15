@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- MUC nick without the "-web" suffix: the archiver appeared in public rooms as
+  "<user>-web", confusing other participants. Since it is just another resource
+  of the same account and the server allows multi-session with the same nick, it
+  now joins under the plain username ("<user>"). Login stores muc_nick = username.
 - Bugfix: do not archive or display empty messages. Other own clients regularly
   send empty messages (e.g. OMEMO-encrypted chat states/markers with no text)
   that arrived as an empty body and showed up as "(empty)". The daemon no longer
