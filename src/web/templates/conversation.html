@@ -59,7 +59,7 @@
   <p>Noch keine Nachrichten. Schreibe die erste unten.</p>
 </div>
 
-<form class="composer" method="post" action="/c/{{ partner }}/send">
+<form class="composer" method="post" action="/c/{{ partner }}/send" enctype="multipart/form-data">
   <div class="reply-preview" id="reply-preview" hidden>
     <div class="reply-preview-body">
       <span class="reply-preview-who" id="reply-who"></span>
@@ -69,7 +69,13 @@
   </div>
   <div class="composer-row">
     <input type="hidden" name="quote" id="reply-quote" value="">
-    <input type="text" name="body" placeholder="Nachricht schreiben …" autocomplete="off" autofocus required aria-label="Nachricht">
+    {% if not is_room %}
+    <label class="icon-btn attach-btn" title="Anhang senden" aria-label="Anhang senden">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+      <input type="file" name="file" id="attach-input" hidden>
+    </label>
+    {% endif %}
+    <input type="text" name="body" placeholder="Nachricht schreiben …" autocomplete="off" autofocus aria-label="Nachricht">
     <button class="icon-btn" type="submit" aria-label="Senden">
       <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
     </button>

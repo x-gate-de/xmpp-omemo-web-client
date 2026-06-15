@@ -129,9 +129,10 @@ class MessageArchive:
 
     def claim_pending_outbox(self):
         rows = self._conn.execute(
-            "SELECT id, recipient_jid, body, kind FROM outbox WHERE status = 'pending' ORDER BY id"
+            "SELECT id, recipient_jid, body, kind, media_path, media_name, media_mime "
+            "FROM outbox WHERE status = 'pending' ORDER BY id"
         ).fetchall()
-        return [(r[0], r[1], r[2], r[3]) for r in rows]
+        return [(r[0], r[1], r[2], r[3], r[4], r[5], r[6]) for r in rows]
 
     def mark_outbox_sent(self, outbox_id):
         self._conn.execute(

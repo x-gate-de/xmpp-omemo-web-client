@@ -167,17 +167,23 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
   installierbar ist und im Vollbild (standalone) startet.
 - Bewusst **ohne** Service Worker und **ohne** Push-Benachrichtigungen.
 
-### F19 — Anhaenge anzeigen (OMEMO-Media, XEP-0454)
-- 1:1-Anhaenge kommen als `aesgcm://`-URL an: die Datei liegt AES-256-GCM-
-  verschluesselt auf dem HTTP-Upload-Server, Schluessel und IV stehen im URL-Fragment.
-- Ein entschluesselnder Media-Proxy (Endpoint `/media/{msg_id}`, nur fuer den
+### F19 — Anhaenge anzeigen und senden (OMEMO-Media, XEP-0454/0363)
+- **Empfang/Anzeige:** 1:1-Anhaenge kommen als `aesgcm://`-URL an: die Datei liegt
+  AES-256-GCM-verschluesselt auf dem HTTP-Upload-Server, Schluessel und IV stehen im
+  URL-Fragment. Ein entschluesselnder Media-Proxy (`/media/{msg_id}`, nur fuer den
   angemeldeten Account) holt die Datei und liefert den Klartext aus. Bilder werden
   inline angezeigt, andere Dateitypen als Anhang verlinkt; die Liste zeigt `[Bild]`/
   `[Anhang]` statt der Roh-URL.
-- Sicherheit: Die Datei wird ausschliesslich von der eigenen XMPP-Domain geladen
-  (SSRF-Schutz), mit Groessenlimit; Schlusselmaterial bleibt serverseitig, die
-  Auslieferung erfolgt mit `Cache-Control: private` und `nosniff`.
-- Phase 1 nur lesend: Es werden keine Anhaenge hochgeladen/gesendet.
+- **Senden (nur 1:1):** Die Web-UI legt die ausgewaehlte Datei im Account-Spool ab und
+  schreibt einen Media-Auftrag in die Outbox. Der Daemon verschluesselt sie AES-256-GCM,
+  laedt sie per HTTP File Upload (XEP-0363) hoch und sendet die `aesgcm://`-URL
+  ausschliesslich im OMEMO-verschluesselten Body (kein Klartext-OOB, damit das
+  Schluesselmaterial nicht offenliegt). Danach wird die Spool-Datei geloescht und die
+  Nachricht als 'out' archiviert.
+- Sicherheit: Laden/Anzeigen nur von der eigenen XMPP-Domain (SSRF-Schutz), Groessen-
+  limit (30 MB); Schluesselmaterial bleibt serverseitig; Auslieferung mit
+  `Cache-Control: private` und `nosniff`.
+- In unverschluesselten Gruppenraeumen sind Anhaenge nicht vorgesehen.
 
 ## Nicht-funktionale Anforderungen
 
@@ -208,7 +214,7 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
   aber nicht entschluesselbar).
 - **Keine Garantie auf Vollstaendigkeit** bei manuell verifizierten Gegenstellen, bis diese
   dem Archiv-Geraet vertrauen.
-- **Kein Senden/Hochladen von Anhaengen.** Empfang und Anzeige von OMEMO-Media
-  (XEP-0454) wird unterstuetzt (siehe F19), das Versenden von Anhaengen nicht.
+- **Anhaenge nur in 1:1 (OMEMO-Media, XEP-0454/0363).** In unverschluesselten
+  Gruppenraeumen werden keine Anhaenge gesendet/angezeigt (siehe F19).
 - **Keine Push-Benachrichtigungen / kein Service Worker.**
 - **Keine Praesenz-/Tipp-Anzeigen**, keine Lesebestaetigungen nach aussen.

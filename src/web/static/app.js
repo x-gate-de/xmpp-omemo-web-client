@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.6.0
+// Version: 1.7.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -521,6 +521,14 @@
     if (replyCancel) replyCancel.addEventListener("click", function () {
       var qi = document.getElementById("reply-quote"); if (qi) qi.value = "";
       var pv = document.getElementById("reply-preview"); if (pv) pv.hidden = true;
+    });
+
+    // Anhang: bei Dateiauswahl den Composer direkt absenden (Upload -> Daemon).
+    var attach = document.getElementById("attach-input");
+    if (attach) attach.addEventListener("change", function () {
+      if (attach.files && attach.files.length && attach.form) {
+        if (attach.form.requestSubmit) attach.form.requestSubmit(); else attach.form.submit();
+      }
     });
 
     // --- Paginierung: aeltere Nachrichten nachladen (lokal, dann per MAM) ---

@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.3.0
+# Version: 2.4.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -19,12 +19,13 @@ import sqlite3
 import ssl
 import time
 import urllib.request
+import uuid
 from datetime import datetime
 from urllib.parse import urlparse
 
 import jinja2
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -619,15 +620,58 @@ def media(msg_id: int, acc: dict = Depends(require_account)):
     })
 
 
+# Spool-Verzeichnis je Account fuer zu sendende Anhaenge (Daemon liest + loescht).
+def _account_spool_dir(archive_path):
+    d = os.path.join(os.path.dirname(archive_path), "spool")
+    os.makedirs(d, exist_ok=True)
+    try:
+        os.chmod(d, 0o700)
+    except OSError:
+        pass
+    return d
+
+
 @app.post("/c/{partner:path}/send")
-def send_message(partner: str, body: str = Form(...), quote: str = Form(""), acc: dict = Depends(require_account)):
+def send_message(partner: str, body: str = Form(""), quote: str = Form(""),
+                 file: UploadFile = File(None), acc: dict = Depends(require_account)):
+    db = acc["archive_path"]
     text = (body or "").strip()
     quote = (quote or "").strip()
+
+    # Anhang: nur fuer 1:1 (OMEMO-Media). In Raeumen (unverschluesselt) nicht unterstuetzt.
+    if file is not None and (file.filename or ""):
+        conn = _open_ro(db)
+        try:
+            is_room = _is_room(conn, partner)
+        finally:
+            conn.close()
+        data = file.file.read(_MEDIA_MAX + 1)
+        if not is_room and data and len(data) <= _MEDIA_MAX:
+            spool = _account_spool_dir(db)
+            name = os.path.basename(file.filename) or "datei"
+            path = os.path.join(spool, uuid.uuid4().hex + os.path.splitext(name)[1])
+            with open(path, "wb") as out:
+                out.write(data)
+            try:
+                os.chmod(path, 0o600)
+            except OSError:
+                pass
+            conn = _open_rw(db)
+            try:
+                conn.execute(
+                    "INSERT INTO outbox (recipient_jid, body, status, created_ts, kind, "
+                    "media_path, media_name, media_mime) VALUES (?, ?, 'pending', ?, 'media', ?, ?, ?)",
+                    (partner, name, time.time(), path, name, file.content_type or "application/octet-stream"),
+                )
+                conn.commit()
+            finally:
+                conn.close()
+
     if text and quote:
         # Zitat als "> "-Zeilen voranstellen (von jedem Client verstanden).
         text = "\n".join("> " + ln for ln in quote.split("\n")) + "\n" + text
     if text:
-        conn = _open_rw(acc["archive_path"])
+        conn = _open_rw(db)
         try:
             kind = "groupchat" if _is_room(conn, partner) else "chat"
             conn.execute(

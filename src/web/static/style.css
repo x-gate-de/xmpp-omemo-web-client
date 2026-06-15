@@ -266,6 +266,9 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 }
 .icon-btn:hover { background: var(--primary-hover); }
 .icon-btn:active { transform: scale(.94); }
+/* Anhang-Knopf: sekundaer (nicht der blaue Senden-Knopf) */
+.attach-btn { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+.attach-btn:hover { background: var(--bg); color: var(--fg); }
 
 /* --- Antwort / Zitat ----------------------------------------------------- */
 .msg { position: relative; }

@@ -57,7 +57,11 @@ def ensure_schema(conn):
         "  sent_ts REAL"
         ")"
     )
-    _add_column_if_missing(conn, "outbox", "kind", "kind TEXT NOT NULL DEFAULT 'chat'")  # chat/groupchat
+    _add_column_if_missing(conn, "outbox", "kind", "kind TEXT NOT NULL DEFAULT 'chat'")  # chat/groupchat/media
+    # Anhaenge (kind='media'): Spool-Datei + Metadaten fuer den Daemon-Upload.
+    _add_column_if_missing(conn, "outbox", "media_path", "media_path TEXT")
+    _add_column_if_missing(conn, "outbox", "media_name", "media_name TEXT")
+    _add_column_if_missing(conn, "outbox", "media_mime", "media_mime TEXT")
     conn.execute("CREATE INDEX IF NOT EXISTS idx_outbox_status ON outbox (status, id)")
 
     # Lesezustand je Konversation/Raum.

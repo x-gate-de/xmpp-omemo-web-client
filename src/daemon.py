@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben Belz
-# Version: 1.2.1
+# Version: 1.3.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -20,10 +20,13 @@
 
 import asyncio
 import datetime
+import io
 import logging
+import os
 import sys
 import time
 
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from slixmpp import ClientXMPP, JID
 from slixmpp.plugins import register_plugin
 from slixmpp_omemo import TrustLevel, XEP_0384
@@ -98,6 +101,8 @@ class ArchiverBot(ClientXMPP):
         self.register_plugin("xep_0045")  # Multi-User Chat
         self.register_plugin("xep_0184")  # Empfangsbestaetigungen
         self.register_plugin("xep_0313")  # Message Archive Management (MAM)
+        self.register_plugin("xep_0363")  # HTTP File Upload (Anhaenge)
+        self.register_plugin("xep_0066")  # Out of Band Data (oob)
         self.register_plugin(
             "xep_0384",
             {"state_db_path": config["omemo"]["state_path"]},
@@ -263,8 +268,11 @@ class ArchiverBot(ClientXMPP):
         while True:
             try:
                 await self._join_pending_rooms()
-                for outbox_id, recipient, body, kind in self._archive.claim_pending_outbox():
-                    if kind == "groupchat":
+                for (outbox_id, recipient, body, kind,
+                     media_path, media_name, media_mime) in self._archive.claim_pending_outbox():
+                    if kind == "media":
+                        await self._send_media(outbox_id, recipient, media_path, media_name, media_mime)
+                    elif kind == "groupchat":
                         await self._send_groupchat(outbox_id, recipient, body)
                     else:
                         await self._send_chat(outbox_id, recipient, body)
@@ -278,24 +286,31 @@ class ArchiverBot(ClientXMPP):
                 logger.error("Outbox-Verarbeitung fehlgeschlagen: %s", type(e).__name__)
             await asyncio.sleep(2)
 
-    # Verschluesselt (OMEMO) und sendet eine 1:1-Nachricht, archiviert als 'out'.
-    async def _send_chat(self, outbox_id, recipient, body):
+    # OMEMO-Verschluesselung + Versand eines 1:1-Bodys. Gibt die Message-ID zurueck
+    # (oder None bei fehlgeschlagener Verschluesselung).
+    async def _omemo_send(self, recipient, body):
         recipient_jid = JID(recipient)
         xep_0384 = self["xep_0384"]
+        await xep_0384.refresh_device_lists({recipient_jid})
+        plain = self.make_message(mto=recipient_jid, mbody=body, mtype="chat")
+        encrypted, errors = await xep_0384.encrypt_message(plain, {recipient_jid})
+        if errors:
+            logger.warning("OMEMO-Verschluesselung an %s mit %d Fehlern", recipient, len(errors))
+        if encrypted is None:
+            return None
+        msg_id = self.new_id()
+        encrypted["id"] = msg_id
+        encrypted["request_receipt"] = True
+        encrypted.send()
+        return msg_id
+
+    # Verschluesselt (OMEMO) und sendet eine 1:1-Nachricht, archiviert als 'out'.
+    async def _send_chat(self, outbox_id, recipient, body):
         try:
-            await xep_0384.refresh_device_lists({recipient_jid})
-            plain = self.make_message(mto=recipient_jid, mbody=body, mtype="chat")
-            encrypted, errors = await xep_0384.encrypt_message(plain, {recipient_jid})
-            if errors:
-                logger.warning("OMEMO-Verschluesselung an %s mit %d Fehlern", recipient, len(errors))
-            if encrypted is None:
+            msg_id = await self._omemo_send(recipient, body)
+            if msg_id is None:
                 self._archive.mark_outbox_error(outbox_id, "Verschluesselung fehlgeschlagen")
                 return
-            # Eigene Message-ID + Empfangsbestaetigung auf der gesendeten Stanza.
-            msg_id = self.new_id()
-            encrypted["id"] = msg_id
-            encrypted["request_receipt"] = True
-            encrypted.send()
             # stanza_id = echte Message-ID, damit ein spaeteres MAM-Ergebnis dedupliziert.
             self._archive.store(recipient, "out", body, msg_id,
                                 decrypted=True, namespace="send", status="sent", msg_id=msg_id)
@@ -304,6 +319,41 @@ class ArchiverBot(ClientXMPP):
         except Exception as e:
             logger.warning("Senden (1:1) an %s fehlgeschlagen: %s", recipient, type(e).__name__, exc_info=True)
             self._archive.mark_outbox_error(outbox_id, type(e).__name__)
+
+    # Sendet einen Anhang als OMEMO-Media (XEP-0454): Datei AES-256-GCM-verschluesseln,
+    # per HTTP File Upload (XEP-0363) hochladen, die aesgcm://-URL (Schluessel+IV im
+    # Fragment) NUR im OMEMO-verschluesselten Body verschicken (kein Klartext-OOB, sonst
+    # laege der Schluessel offen) und als 'out' archivieren. Die Spool-Datei wird geloescht.
+    async def _send_media(self, outbox_id, recipient, media_path, media_name, media_mime):
+        try:
+            with open(media_path, "rb") as f:
+                data = f.read()
+            key = AESGCM.generate_key(bit_length=256)
+            iv = os.urandom(12)
+            ciphertext = AESGCM(key).encrypt(iv, data, None)  # GCM-Tag haengt am Ciphertext
+            get_url = await self["xep_0363"].upload_file(
+                media_name, size=len(ciphertext),
+                content_type=media_mime or "application/octet-stream",
+                input_file=io.BytesIO(ciphertext), timeout=180,
+            )
+            # https://host/pfad -> aesgcm://host/pfad#<iv-hex><key-hex>
+            aesgcm_url = "aesgcm://" + str(get_url).split("://", 1)[-1] + "#" + iv.hex() + key.hex()
+            msg_id = await self._omemo_send(recipient, aesgcm_url)
+            if msg_id is None:
+                self._archive.mark_outbox_error(outbox_id, "Verschluesselung fehlgeschlagen")
+                return
+            self._archive.store(recipient, "out", aesgcm_url, msg_id,
+                                decrypted=True, namespace="send", status="sent", msg_id=msg_id)
+            self._archive.mark_outbox_sent(outbox_id)
+            logger.info("Anhang gesendet (1:1) an %s (%s)", recipient, media_name)
+        except Exception as e:
+            logger.warning("Anhang-Senden an %s fehlgeschlagen: %s", recipient, type(e).__name__, exc_info=True)
+            self._archive.mark_outbox_error(outbox_id, type(e).__name__)
+        finally:
+            try:
+                os.remove(media_path)
+            except OSError:
+                pass
 
     # Sendet eine Gruppennachricht (unverschluesselt). Die Reflexion wird archiviert.
     async def _send_groupchat(self, outbox_id, room, body):
