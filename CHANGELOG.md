@@ -1,6 +1,11 @@
 # Changelog
 
 ## [Unreleased]
+- Readable send errors + dismissable failures + version hint: encryption/send
+  errors now show a readable message (e.g. "recipient has no trusted OMEMO device")
+  instead of the technical exception name; failed outbox jobs can be dismissed via
+  an "x" (clears the red error bubble; deletes only 'error' rows); the design menu
+  shows a small product-version footer ("X-Chat <version>") linking to this changelog.
 - Send attachments (OMEMO media, XEP-0454/0363): you can now send files/images
   in 1:1 chats (paperclip in the composer; picking a file sends it immediately).
   Flow: the web UI spools the file and queues a media job; the daemon AES-256-GCM-
