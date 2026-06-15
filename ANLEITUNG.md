@@ -88,6 +88,8 @@ Auf der Startseite siehst du deine Gespräche als Kacheln:
   Anhang verlinkt.
 - **Senden:** Tippe im Eingabebereich auf die **Büroklammer**, wähle eine Datei –
   sie wird sofort verschlüsselt hochgeladen und gesendet.
+- **Drag & Drop (am Computer):** Ziehe eine oder mehrere Dateien einfach ins
+  Chat‑Fenster und lasse sie los – sie werden direkt gesendet.
 - Anhänge funktionieren in 1:1‑Chats (verschlüsselt), nicht in offenen Räumen.
 
 ---

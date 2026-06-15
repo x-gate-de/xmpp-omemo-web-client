@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- Attachments via drag & drop: drag one or more files into the chat window and drop
+  them to send as attachments (1:1 only, same path as the paperclip). With a "drop
+  here" overlay and a 30 MB per-file limit.
 - Push polish: the notification title is now the chat/sender name (instead of
   "Chat"). iOS automatically appends "from <app name>", which previously produced
   a redundant "Chat from Chat"; now e.g. "Tom Ziegler / from Chat / New message".
