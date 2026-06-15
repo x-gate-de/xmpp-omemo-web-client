@@ -68,4 +68,11 @@ def load_config(path):
     log.setdefault("file", None)
     data["logging"] = log
 
+    # Web Push (optional). Leere Schluessel = Push deaktiviert.
+    push = data.get("push") or {}
+    push.setdefault("vapid_private_key", "")
+    push.setdefault("vapid_public_key", "")
+    push.setdefault("vapid_subject", "")
+    data["push"] = push
+
     return data

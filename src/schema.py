@@ -144,4 +144,22 @@ def ensure_schema(conn):
         "  updated_ts REAL"
         ")"
     )
+
+    # Web-Push: Geraete-Abos dieses Accounts (vom Web eingetragen, vom Daemon genutzt).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS push_subscriptions ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  endpoint TEXT UNIQUE NOT NULL,"
+        "  p256dh TEXT NOT NULL,"
+        "  auth TEXT NOT NULL,"
+        "  created_ts REAL NOT NULL"
+        ")"
+    )
+    # Push-Auswahl je Konversation/Raum (nur aktivierte loesen Push aus).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS push_prefs ("
+        "  partner_jid TEXT PRIMARY KEY,"
+        "  enabled INTEGER NOT NULL DEFAULT 0"
+        ")"
+    )
     conn.commit()

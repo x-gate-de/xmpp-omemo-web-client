@@ -321,6 +321,9 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 /* --- Sicherheit / OMEMO-Geraete ----------------------------------------- */
 .conv-head .who { flex: 1; }
 .conv-shield { margin: 0; }
+.conv-bell { margin: 0; }
+.conv-bell.on { color: var(--accent); }
+.conv-bell.on svg { fill: color-mix(in srgb, var(--accent) 22%, transparent); }
 .dev-hint { color: var(--muted); font-size: 0.88rem; margin: 0 2px 8px; line-height: 1.5; }
 .dev-list { display: flex; flex-direction: column; gap: 8px; }
 .dev-loading { color: var(--muted); font-size: 0.88rem; margin: 2px; }
