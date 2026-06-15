@@ -32,7 +32,7 @@
     <div class="row {{ m.direction }}" data-id="{{ m.id }}" data-ts="{{ m.ts }}">
       <div class="msg">
         {% if m.sender and m.direction == 'in' %}<span class="sender">{{ m.sender }}</span>{% endif %}
-        {% if m.decrypted %}{% if m.quote %}<span class="msg-quote">{{ m.quote }}</span>{% endif %}<span class="msg-text">{{ m.text }}</span>{% else %}<span class="undec">[nicht entschluesselbar]</span>{% endif %}
+        {% if m.decrypted %}{% if m.media %}{% if m.media.kind == 'image' %}<a class="msg-media" href="{{ m.media.url }}" target="_blank" rel="noopener"><img class="msg-img" src="{{ m.media.url }}" loading="lazy" alt="{{ m.media.name }}"></a>{% else %}<a class="msg-file" href="{{ m.media.url }}" target="_blank" rel="noopener">Anhang: {{ m.media.name }}</a>{% endif %}{% else %}{% if m.quote %}<span class="msg-quote">{{ m.quote }}</span>{% endif %}<span class="msg-text">{{ m.text }}</span>{% endif %}{% else %}<span class="undec">[nicht entschluesselbar]</span>{% endif %}
         {% if m.decrypted and m.text %}<button type="button" class="reply-btn" data-quote="{{ m.text }}" data-who="{% if m.sender %}{{ m.sender }}{% elif m.direction == 'out' %}Du{% else %}{{ name }}{% endif %}" title="Antworten" aria-label="Antworten"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></button>{% endif %}
         <span class="meta">
           <span>{{ m.ts }}</span>
