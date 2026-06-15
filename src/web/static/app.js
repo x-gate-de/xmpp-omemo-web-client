@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.9.0
+// Version: 1.10.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -588,6 +588,41 @@
         if (attach.form.requestSubmit) attach.form.requestSubmit(); else attach.form.submit();
       }
     });
+
+    // Drag & Drop: Dateien ins Chat-Fenster ziehen -> als Anhang senden (nur 1:1,
+    // genau wie ueber die Bueroklammer). Nutzt denselben /send-Endpoint.
+    if (document.getElementById("attach-input")) {
+      var composerEl = document.querySelector(".composer");
+      var dropAction = composerEl ? composerEl.getAttribute("action") : null;
+      var overlay = el("div", "drop-overlay");
+      var dropBox = el("div", "drop-box");
+      dropBox.appendChild(icon('<svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>'));
+      dropBox.appendChild(el("span", null, "Dateien hier ablegen zum Senden"));
+      overlay.appendChild(dropBox);
+      document.body.appendChild(overlay);
+
+      var dragDepth = 0;
+      var hasFiles = function (e) {
+        return e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], "Files") >= 0;
+      };
+      var showDrop = function (on) { overlay.classList.toggle("on", on); };
+      window.addEventListener("dragenter", function (e) { if (!hasFiles(e)) return; e.preventDefault(); dragDepth++; showDrop(true); });
+      window.addEventListener("dragover", function (e) { if (!hasFiles(e)) return; e.preventDefault(); });
+      window.addEventListener("dragleave", function (e) { if (!hasFiles(e)) return; dragDepth--; if (dragDepth <= 0) { dragDepth = 0; showDrop(false); } });
+      window.addEventListener("drop", function (e) {
+        if (!hasFiles(e)) return;
+        e.preventDefault(); dragDepth = 0; showDrop(false);
+        if (!dropAction) return;
+        var files = e.dataTransfer.files, jobs = [];
+        for (var i = 0; i < files.length; i++) {
+          var f = files[i];
+          if (f.size > 30 * 1024 * 1024) { alert("\"" + f.name + "\" ist groesser als 30 MB und wird nicht gesendet."); continue; }
+          var fd = new FormData(); fd.append("file", f, f.name);
+          jobs.push(fetch(dropAction, { method: "POST", credentials: "same-origin", body: fd }));
+        }
+        if (jobs.length) Promise.all(jobs).then(function () { window.location.reload(); }).catch(function () { window.location.reload(); });
+      });
+    }
 
     // Push-Glocke: pro Chat an/aus. Beim Aktivieren wird (einmalig) das Geraet abonniert.
     var bell = document.getElementById("push-bell");

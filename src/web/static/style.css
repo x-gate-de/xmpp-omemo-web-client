@@ -284,6 +284,19 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .attach-btn { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
 .attach-btn:hover { background: var(--bg); color: var(--fg); }
 
+/* Drag & Drop: Anhang ins Chat-Fenster ziehen */
+.drop-overlay {
+  position: fixed; inset: 0; z-index: 60; display: none; place-items: center;
+  background: color-mix(in srgb, var(--bg) 68%, transparent); pointer-events: none;
+}
+.drop-overlay.on { display: grid; }
+.drop-box {
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: 38px 54px; border-radius: 18px; color: var(--primary); font-weight: 600;
+  border: 2px dashed color-mix(in srgb, var(--primary) 55%, var(--border));
+  background: var(--surface); box-shadow: var(--shadow);
+}
+
 /* --- Antwort / Zitat ----------------------------------------------------- */
 .msg { position: relative; }
 .msg-text { white-space: pre-wrap; overflow-wrap: anywhere; }
