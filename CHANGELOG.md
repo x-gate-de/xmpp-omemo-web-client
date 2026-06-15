@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- Bugfix: do not archive or display empty messages. Other own clients regularly
+  send empty messages (e.g. OMEMO-encrypted chat states/markers with no text)
+  that arrived as an empty body and showed up as "(empty)". The daemon no longer
+  archives empty bodies (live plain + OMEMO and MAM backfill check the body after
+  decryption), and the web UI filters already-archived empty rows out of all read
+  queries (conversation list incl. preview/recent, thread view, pagination).
+  Undecryptable messages (decrypted=0) remain visible.
 - SPEC.md brought up to date: multi-user login (F1), session-based access control
   for the web UI (F6), and new requirements F12-F18 (full-text search, quote
   replies, OMEMO verification, pagination and on-demand MAM backfill, online
