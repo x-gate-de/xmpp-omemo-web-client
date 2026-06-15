@@ -189,9 +189,15 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 2px 14px;
+  padding: 10px 2px 12px;
   border-bottom: 1px solid var(--border);
   margin-bottom: 14px;
+  /* Bleibt unter der App-Bar kleben, damit Name/Glocke/Schild auch in langen
+     Verlaeufen erreichbar sind (kein Hochscrollen noetig). */
+  position: sticky;
+  top: var(--appbar-h);
+  z-index: 30;
+  background: var(--bg);
 }
 .conv-head .who { min-width: 0; }
 .conv-head .name { font-weight: 700; }
