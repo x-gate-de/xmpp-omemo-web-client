@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben Belz
-# Version: 1.4.1
+# Version: 1.4.2
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -411,9 +411,11 @@ class ArchiverBot(ClientXMPP):
             subs = self._archive.push_subscriptions()
             if not subs:
                 return
+            # iOS haengt automatisch "from <App-Name>" an -> Titel = Name des Chats
+            # (statt nochmal "Chat"), damit es nicht doppelt "Chat from Chat" heisst.
             name = self._archive.display_name(partner)
-            body = ("Neue Nachricht in " if in_room else "Neue Nachricht von ") + name
-            payload = json.dumps({"title": "Chat", "body": body, "url": "/c/" + partner})
+            body = "Neue Nachricht im Raum" if in_room else "Neue Nachricht"
+            payload = json.dumps({"title": name, "body": body, "url": "/c/" + partner})
             loop = asyncio.get_event_loop()
             for sub in subs:
                 gone = await loop.run_in_executor(None, self._send_one_push, sub, payload)

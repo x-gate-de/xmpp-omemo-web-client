@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- Push polish: the notification title is now the chat/sender name (instead of
+  "Chat"). iOS automatically appends "from <app name>", which previously produced
+  a redundant "Chat from Chat"; now e.g. "Tom Ziegler / from Chat / New message".
 - Optional: MAM backfill to cover daemon downtime.
 
 ## [1.3.0] - 2026-06-15
