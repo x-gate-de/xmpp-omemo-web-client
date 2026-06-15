@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.4.0
+# Version: 2.5.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -63,6 +63,12 @@ def _asset_version():
 
 
 _env.globals["asset_ver"] = _asset_version()
+
+# Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog).
+APP_VERSION = "1.1.0"
+CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
+_env.globals["app_version"] = APP_VERSION
+_env.globals["changelog_url"] = CHANGELOG_URL
 
 
 # --- Authentifizierung ------------------------------------------------------
@@ -383,12 +389,12 @@ def _pending(db_path, partner):
     conn = _open_ro(db_path)
     try:
         rows = conn.execute(
-            "SELECT body, status FROM outbox WHERE recipient_jid = ? AND status IN ('pending','error') ORDER BY id",
+            "SELECT id, body, status, error FROM outbox WHERE recipient_jid = ? AND status IN ('pending','error') ORDER BY id",
             (partner,),
         ).fetchall()
     finally:
         conn.close()
-    return [{"body": r["body"], "status": r["status"]} for r in rows]
+    return [{"id": r["id"], "body": r["body"], "status": r["status"], "error": r["error"]} for r in rows]
 
 
 def _mark_read(db_path, partner):
@@ -681,6 +687,21 @@ def send_message(partner: str, body: str = Form(""), quote: str = Form(""),
             conn.commit()
         finally:
             conn.close()
+    return RedirectResponse(url=f"/c/{partner}", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# Verwirft einen fehlgeschlagenen Sendeauftrag (entfernt nur 'error'-Zeilen).
+@app.post("/c/{partner:path}/dismiss/{outbox_id:int}")
+def dismiss_failed(partner: str, outbox_id: int, acc: dict = Depends(require_account)):
+    conn = _open_rw(acc["archive_path"])
+    try:
+        conn.execute(
+            "DELETE FROM outbox WHERE id = ? AND recipient_jid = ? AND status = 'error'",
+            (outbox_id, partner),
+        )
+        conn.commit()
+    finally:
+        conn.close()
     return RedirectResponse(url=f"/c/{partner}", status_code=status.HTTP_303_SEE_OTHER)
 
 

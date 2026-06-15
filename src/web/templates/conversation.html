@@ -51,7 +51,7 @@
 
 <div id="pending">
   {% for p in pending %}
-    <div class="row out pending"><div class="msg">{{ p.body }}<span class="meta">{% if p.status == 'error' %}Fehler{% else %}wird gesendet …{% endif %}</span></div></div>
+    <div class="row out pending{% if p.status == 'error' %} failed{% endif %}"><div class="msg">{{ p.body }}<span class="meta">{% if p.status == 'error' %}Fehler: {{ p.error or 'unbekannt' }}{% else %}wird gesendet …{% endif %}</span>{% if p.status == 'error' %}<form class="dismiss-form" method="post" action="/c/{{ partner }}/dismiss/{{ p.id }}"><button type="submit" class="dismiss-btn" title="Verwerfen" aria-label="Fehlgeschlagene Nachricht verwerfen">&times;</button></form>{% endif %}</div></div>
   {% endfor %}
 </div>
 

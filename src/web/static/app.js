@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.7.0
+// Version: 1.8.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -142,10 +142,24 @@
 
   // "wird gesendet"/"Fehler"-Blase aus der Outbox.
   function renderPending(p) {
-    var row = el("div", "row out pending");
+    var row = el("div", "row out pending" + (p.status === "error" ? " failed" : ""));
     var bubble = el("div", "msg");
     bubble.appendChild(document.createTextNode(p.body || ""));
-    bubble.appendChild(el("div", "meta", p.status === "error" ? "Fehler" : "wird gesendet …"));
+    var info = p.status === "error" ? ("Fehler: " + (p.error || "unbekannt")) : "wird gesendet …";
+    bubble.appendChild(el("div", "meta", info));
+    if (p.status === "error" && p.id) {
+      // Fehlgeschlagenen Auftrag verwerfen (Formular-POST -> Reload).
+      var box = document.getElementById("messages");
+      var partner = box ? box.getAttribute("data-partner") : "";
+      var form = document.createElement("form");
+      form.className = "dismiss-form"; form.method = "post";
+      form.action = "/c/" + partner + "/dismiss/" + p.id;
+      var b = document.createElement("button");
+      b.type = "submit"; b.className = "dismiss-btn"; b.title = "Verwerfen";
+      b.setAttribute("aria-label", "Fehlgeschlagene Nachricht verwerfen");
+      b.textContent = "×";
+      form.appendChild(b); bubble.appendChild(form);
+    }
     row.appendChild(bubble);
     return row;
   }

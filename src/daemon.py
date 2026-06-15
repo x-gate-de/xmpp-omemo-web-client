@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben Belz
-# Version: 1.3.0
+# Version: 1.3.1
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -35,6 +35,15 @@ from .archive import MessageArchive
 from .omemo_storage import SqliteOmemoStorage
 
 logger = logging.getLogger(__name__)
+
+
+# Uebersetzt technische Sende-/Verschluesselungsfehler in eine verstaendliche Meldung
+# fuer die Outbox-Anzeige (ohne sensible Details).
+def _human_send_error(exc):
+    name = type(exc).__name__
+    if name == "NoEligibleDevices":
+        return "Empfaenger hat kein vertrautes OMEMO-Geraet (verschluesselt nicht moeglich)"
+    return name
 
 
 # Konkrete OMEMO-Plugin-Implementierung (Storage + Trust-Politik).
@@ -318,7 +327,7 @@ class ArchiverBot(ClientXMPP):
             logger.info("Gesendet (1:1) an %s", recipient)
         except Exception as e:
             logger.warning("Senden (1:1) an %s fehlgeschlagen: %s", recipient, type(e).__name__, exc_info=True)
-            self._archive.mark_outbox_error(outbox_id, type(e).__name__)
+            self._archive.mark_outbox_error(outbox_id, _human_send_error(e))
 
     # Sendet einen Anhang als OMEMO-Media (XEP-0454): Datei AES-256-GCM-verschluesseln,
     # per HTTP File Upload (XEP-0363) hochladen, die aesgcm://-URL (Schluessel+IV im
@@ -348,7 +357,7 @@ class ArchiverBot(ClientXMPP):
             logger.info("Anhang gesendet (1:1) an %s (%s)", recipient, media_name)
         except Exception as e:
             logger.warning("Anhang-Senden an %s fehlgeschlagen: %s", recipient, type(e).__name__, exc_info=True)
-            self._archive.mark_outbox_error(outbox_id, type(e).__name__)
+            self._archive.mark_outbox_error(outbox_id, _human_send_error(e))
         finally:
             try:
                 os.remove(media_path)
@@ -366,7 +375,7 @@ class ArchiverBot(ClientXMPP):
             logger.info("Gesendet (Gruppe) an %s", room)
         except Exception as e:
             logger.warning("Senden (Gruppe) an %s fehlgeschlagen: %s", room, type(e).__name__)
-            self._archive.mark_outbox_error(outbox_id, type(e).__name__)
+            self._archive.mark_outbox_error(outbox_id, _human_send_error(e))
 
     # --- MAM: aeltere Nachrichten nachladen ---------------------------------
 
