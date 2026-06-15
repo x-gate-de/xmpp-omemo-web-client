@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/manager.py
 # Autor: Torben Belz
-# Version: 1.1.0
+# Version: 1.2.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Account-Manager fuer den Multi-User-Betrieb: haelt je aktivem Account eine
@@ -47,6 +47,7 @@ class AccountManager:
                 "trust_policy": self._config["omemo"].get("trust_policy", "btbv"),
             },
             "archive": {"db_path": self._registry.archive_path(jid)},
+            "push": self._config.get("push") or {},
         }
 
     def _connect(self, acc):

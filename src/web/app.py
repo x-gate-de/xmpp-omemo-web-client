@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.6.0
+# Version: 2.7.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -69,6 +69,11 @@ APP_VERSION = "1.2.0"
 CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
 _env.globals["app_version"] = APP_VERSION
 _env.globals["changelog_url"] = CHANGELOG_URL
+
+# Web Push: aktiv, wenn VAPID-Schluessel konfiguriert sind.
+_push = config.get("push") or {}
+_PUSH_PUBLIC = _push.get("vapid_public_key") or ""
+_PUSH_ENABLED = bool(_PUSH_PUBLIC and (_push.get("vapid_private_key") or ""))
 
 
 # --- Authentifizierung ------------------------------------------------------
@@ -502,6 +507,70 @@ def delete_account(request: Request, acc: dict = Depends(require_account)):
     return RedirectResponse(url="/login?deleted=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
+# --- Web Push ---------------------------------------------------------------
+
+# Service Worker im Wurzel-Scope ausliefern (steuert die ganze App).
+@app.get("/sw.js")
+def service_worker():
+    with open(os.path.join(_static_dir, "sw.js"), "rb") as f:
+        data = f.read()
+    return Response(content=data, media_type="text/javascript",
+                    headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
+
+
+@app.get("/api/push/config")
+def push_config(acc: dict = Depends(require_account)):
+    return {"enabled": _PUSH_ENABLED, "publicKey": _PUSH_PUBLIC}
+
+
+# Geraete-Abo des Browsers speichern (Endpoint + Schluessel).
+@app.post("/api/push/subscribe")
+async def push_subscribe(request: Request, acc: dict = Depends(require_account)):
+    sub = await request.json()
+    endpoint = (sub or {}).get("endpoint")
+    keys = (sub or {}).get("keys") or {}
+    p256dh, auth = keys.get("p256dh"), keys.get("auth")
+    if not (endpoint and p256dh and auth):
+        raise HTTPException(status_code=400)
+    conn = _open_rw(acc["archive_path"])
+    try:
+        conn.execute(
+            "INSERT INTO push_subscriptions (endpoint, p256dh, auth, created_ts) VALUES (?, ?, ?, ?) "
+            "ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth",
+            (endpoint, p256dh, auth, time.time()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
+@app.get("/api/push/pref/{partner:path}")
+def push_pref_get(partner: str, acc: dict = Depends(require_account)):
+    conn = _open_ro(acc["archive_path"])
+    try:
+        row = conn.execute("SELECT enabled FROM push_prefs WHERE partner_jid = ?", (partner,)).fetchone()
+        subs = conn.execute("SELECT COUNT(*) FROM push_subscriptions").fetchone()[0]
+    finally:
+        conn.close()
+    return {"enabled": bool(row and row["enabled"]), "subscribed": bool(subs), "push": _PUSH_ENABLED}
+
+
+@app.post("/api/push/pref/{partner:path}")
+def push_pref_set(partner: str, value: str = Form(...), acc: dict = Depends(require_account)):
+    conn = _open_rw(acc["archive_path"])
+    try:
+        conn.execute(
+            "INSERT INTO push_prefs (partner_jid, enabled) VALUES (?, ?) "
+            "ON CONFLICT(partner_jid) DO UPDATE SET enabled = excluded.enabled",
+            (partner, 1 if value == "1" else 0),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return {"ok": True}
+
+
 # Schaltet "immer online" fuer den eigenen Account um (enabled-Flag).
 # enabled=0 -> der Manager trennt die Verbindung (keine Archivierung mehr),
 # enabled=1 -> der Manager verbindet wieder.
@@ -565,7 +634,7 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
         oldest_ts=(oldest["ts_raw"] if oldest else 0), oldest_id=(oldest["id"] if oldest else 0),
         has_more=has_more, is_room=is_room, initials=_initials(name if name != partner else "", partner),
         hue=_hue(partner), nav_active="archiv", account_jid=acc["jid"],
-        account_state=_account_state(acc["jid"]),
+        account_state=_account_state(acc["jid"]), push_enabled=_PUSH_ENABLED,
     )
 
 

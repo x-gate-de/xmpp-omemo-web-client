@@ -40,6 +40,13 @@ web:
   bind_port: 8080
   base_path: "/"
 
+# Web Push (optional). Leer lassen = Push deaktiviert.
+# Schluessel erzeugen: ./venv/bin/python scripts/gen_vapid.py "mailto:admin@example.com"
+push:
+  vapid_subject: "mailto:admin@example.com"
+  vapid_public_key: ""   # Application Server Key (base64url) - nicht geheim
+  vapid_private_key: ""   # EC-Private-Key (PEM) - GEHEIM, nur auf dem Server
+
 logging:
   level: "INFO"
   file: "/var/log/omemo-web/daemon.log"

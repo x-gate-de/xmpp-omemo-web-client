@@ -1,6 +1,15 @@
 # Changelog
 
 ## [Unreleased]
+- Push notifications (Web Push, selective per chat): enable push per person/room via
+  the bell in the chat header. Only selected chats trigger a notification, so busy
+  rooms stay silent. Content-less for privacy: the notification only shows "New
+  message from/in <name>" plus a deep link to the chat -- no message text leaves the
+  server toward the push service. Building blocks: service worker (/sw.js), VAPID keys
+  in config.yaml (scripts/gen_vapid.py), per-account device subscriptions + selection
+  (push_subscriptions/push_prefs), daemon-side send on incoming live messages (1:1 +
+  room), pruning of expired subscriptions (HTTP 404/410). Requires HTTPS; on iPhone
+  (iOS 16.4+) only as an app added to the Home Screen. New dependency: pywebpush.
 - Optional: MAM backfill to cover daemon downtime.
 
 ## [1.2.0] - 2026-06-15

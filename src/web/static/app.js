@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.8.0
+// Version: 1.9.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -94,6 +94,50 @@
     if (s < 86400) return "vor " + Math.round(s / 3600) + " Std";
     if (s < 172800) return "gestern";
     return "vor " + Math.round(s / 86400) + " Tagen";
+  }
+
+  // --- Web Push ------------------------------------------------------------
+  var swReg = null;
+  function urlB64ToUint8Array(base64String) {
+    var padding = "=".repeat((4 - base64String.length % 4) % 4);
+    var base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+    var raw = atob(base64), arr = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) arr[i] = raw.charCodeAt(i);
+    return arr;
+  }
+  function ensureServiceWorker() {
+    if (!("serviceWorker" in navigator)) return Promise.reject(new Error("unsupported"));
+    if (swReg) return Promise.resolve(swReg);
+    return navigator.serviceWorker.register("/sw.js").then(function (r) { swReg = r; return r; });
+  }
+  // Permission + Abo sicherstellen und an den Server melden.
+  function ensurePushSubscription() {
+    return fetch("/api/push/config", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (cfg) {
+        if (!cfg || !cfg.enabled || !cfg.publicKey) throw new Error("push-disabled");
+        if (!("Notification" in window) || !("PushManager" in window)) throw new Error("unsupported");
+        return Notification.requestPermission().then(function (perm) {
+          if (perm !== "granted") throw new Error("denied");
+          return ensureServiceWorker().then(function (reg) {
+            return reg.pushManager.getSubscription().then(function (sub) {
+              return sub || reg.pushManager.subscribe({
+                userVisibleOnly: true, applicationServerKey: urlB64ToUint8Array(cfg.publicKey)
+              });
+            });
+          });
+        });
+      })
+      .then(function (sub) {
+        return fetch("/api/push/subscribe", {
+          method: "POST", credentials: "same-origin",
+          headers: { "Content-Type": "application/json" }, body: JSON.stringify(sub)
+        });
+      });
+  }
+  // Service Worker beim Laden registrieren (fuer den Empfang vorhandener Abos).
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/sw.js").then(function (r) { swReg = r; }).catch(function () {});
   }
 
   // Archivierte Nachrichtenblase.
@@ -544,6 +588,37 @@
         if (attach.form.requestSubmit) attach.form.requestSubmit(); else attach.form.submit();
       }
     });
+
+    // Push-Glocke: pro Chat an/aus. Beim Aktivieren wird (einmalig) das Geraet abonniert.
+    var bell = document.getElementById("push-bell");
+    if (bell) {
+      var bellPartner = bell.getAttribute("data-partner");
+      var setBell = function (on) {
+        bell.classList.toggle("on", !!on);
+        bell.setAttribute("aria-pressed", on ? "true" : "false");
+      };
+      fetch("/api/push/pref/" + encodeURIComponent(bellPartner), { credentials: "same-origin" })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (st) { if (st) setBell(st.enabled); }).catch(function () {});
+      bell.addEventListener("click", function () {
+        var on = bell.getAttribute("aria-pressed") !== "true";
+        bell.disabled = true;
+        (on ? ensurePushSubscription() : Promise.resolve()).then(function () {
+          return fetch("/api/push/pref/" + encodeURIComponent(bellPartner), {
+            method: "POST", credentials: "same-origin",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "value=" + (on ? "1" : "0")
+          });
+        }).then(function () { setBell(on); bell.disabled = false; })
+          .catch(function (e) {
+            bell.disabled = false;
+            var msg = e && e.message;
+            if (msg === "denied") alert("Benachrichtigungen sind im Browser blockiert. Bitte in den Browser-Einstellungen erlauben.");
+            else if (msg === "unsupported") alert("Dein Browser/Geraet unterstuetzt keine Web-Push. (iPhone: App zum Home-Bildschirm hinzufuegen.)");
+            else alert("Push konnte nicht aktiviert werden.");
+          });
+      });
+    }
 
     // --- Paginierung: aeltere Nachrichten nachladen (lokal, dann per MAM) ---
     var older = document.getElementById("loadolder");

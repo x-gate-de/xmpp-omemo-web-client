@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben Belz
-# Version: 1.3.1
+# Version: 1.4.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -21,12 +21,20 @@
 import asyncio
 import datetime
 import io
+import json
 import logging
 import os
 import sys
 import time
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+try:
+    from pywebpush import webpush, WebPushException
+except ImportError:  # Push optional -- ohne pywebpush bleibt es deaktiviert.
+    webpush = None
+
+    class WebPushException(Exception):
+        pass
 from slixmpp import ClientXMPP, JID
 from slixmpp.plugins import register_plugin
 from slixmpp_omemo import TrustLevel, XEP_0384
@@ -101,6 +109,12 @@ class ArchiverBot(ClientXMPP):
         self._muc_nick = xmpp_cfg.get("muc_nick") or self.boundjid.local
         self._joined_rooms = set()
         self._loops_started = False
+
+        # Web Push (optional): nur aktiv, wenn pywebpush vorhanden und VAPID konfiguriert.
+        push = config.get("push") or {}
+        self._vapid_private = push.get("vapid_private_key") or ""
+        self._vapid_subject = push.get("vapid_subject") or "mailto:admin@example.com"
+        self._push_enabled = bool(webpush and self._vapid_private)
 
         self.register_plugin("xep_0030")  # Service Discovery
         self.register_plugin("xep_0060")  # PubSub
@@ -213,6 +227,8 @@ class ArchiverBot(ClientXMPP):
                 return
             if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True):
                 logger.info("Archiviert (plain, %s) %s", direction, partner_jid)
+                if direction == "in":
+                    asyncio.create_task(self._maybe_push(partner_jid, in_room=False))
             return
 
         namespace = next(iter(namespaces))
@@ -225,6 +241,8 @@ class ArchiverBot(ClientXMPP):
                 return
             if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True, namespace=namespace):
                 logger.info("Archiviert (omemo, %s) %s", direction, partner_jid)
+                if direction == "in":
+                    asyncio.create_task(self._maybe_push(partner_jid, in_room=False))
         except Exception as e:
             logger.warning("Entschluesselung fehlgeschlagen (%s) %s: %s", direction, partner_jid, type(e).__name__)
             self._archive.store(partner_jid, direction, None, stanza_id, decrypted=False, namespace=namespace)
@@ -260,7 +278,9 @@ class ArchiverBot(ClientXMPP):
         # Eigene (reflektierte) Nachrichten als 'out' markieren.
         direction = "out" if nick == self._muc_nick else "in"
         stanza_id = stanza["id"] or ""
-        self._archive.store(room, direction, body, stanza_id, decrypted=True, sender=nick)
+        if self._archive.store(room, direction, body, stanza_id, decrypted=True, sender=nick):
+            if direction == "in":
+                asyncio.create_task(self._maybe_push(room, in_room=True))
 
     # Empfangsbestaetigung (XEP-0184) -> Nachricht als zugestellt markieren.
     async def _on_receipt(self, stanza):
@@ -363,6 +383,51 @@ class ArchiverBot(ClientXMPP):
                 os.remove(media_path)
             except OSError:
                 pass
+
+    # --- Web Push -----------------------------------------------------------
+
+    # Sendet (falls fuer diese Konversation aktiviert) eine inhaltslose Push-Notiz
+    # an alle Geraete-Abos. Inhalt bleibt aus Datenschutzgruenden draussen -- nur
+    # ein Hinweis "Neue Nachricht von/in <Name>" + Link zum Chat.
+    async def _maybe_push(self, partner, in_room):
+        if not self._push_enabled:
+            return
+        try:
+            if not self._archive.push_pref_enabled(partner):
+                return
+            subs = self._archive.push_subscriptions()
+            if not subs:
+                return
+            name = self._archive.display_name(partner)
+            body = ("Neue Nachricht in " if in_room else "Neue Nachricht von ") + name
+            payload = json.dumps({"title": "Chat", "body": body, "url": "/c/" + partner})
+            loop = asyncio.get_event_loop()
+            for sub in subs:
+                gone = await loop.run_in_executor(None, self._send_one_push, sub, payload)
+                if gone:
+                    # Abgelaufenes Abo im Hauptthread entfernen (sqlite ist threadgebunden).
+                    self._archive.delete_push_subscription(sub["endpoint"])
+                    logger.info("Push-Abo entfernt (abgelaufen)")
+        except Exception as e:
+            logger.warning("Push fehlgeschlagen: %s", type(e).__name__)
+
+    # Blockierender Versand eines einzelnen Push (laeuft im Executor-Thread).
+    # Rueckgabe True = Abo ist abgelaufen (404/410) und soll entfernt werden.
+    def _send_one_push(self, sub, payload):
+        info = {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}}
+        try:
+            webpush(subscription_info=info, data=payload,
+                    vapid_private_key=self._vapid_private, vapid_claims={"sub": self._vapid_subject})
+            return False
+        except WebPushException as e:
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if code in (404, 410):
+                return True
+            logger.warning("Push-Versand fehlgeschlagen: HTTP %s", code)
+            return False
+        except Exception as e:
+            logger.warning("Push-Versand fehlgeschlagen: %s", type(e).__name__)
+            return False
 
     # Sendet eine Gruppennachricht (unverschluesselt). Die Reflexion wird archiviert.
     async def _send_groupchat(self, outbox_id, room, body):

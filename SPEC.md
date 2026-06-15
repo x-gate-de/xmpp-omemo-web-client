@@ -196,6 +196,21 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
   erst nachdem kein offener DB-Zugriff mehr besteht.
 - Unwiderruflich. Bereits an Gegenstellen zugestellte Nachrichten sind nicht betroffen.
 
+### F21 — Push-Benachrichtigungen (Web Push, selektiv)
+- Push ist **pro Konversation/Raum** aktivierbar (Glocke im Chat-Kopf). Nur aktivierte
+  Chats loesen eine Benachrichtigung aus; laute Raeume bleiben standardmaessig stumm.
+- **Inhaltslos:** Der Push-Payload enthaelt keinen Nachrichtentext, nur einen Hinweis
+  ("Neue Nachricht von/in <Name>") und einen Deep-Link auf den Chat. So verlaesst kein
+  privater Inhalt den Server Richtung Push-Dienst (Apple/Google).
+- Umsetzung: Service Worker im Wurzel-Scope (`/sw.js`); VAPID-Schluesselpaar in
+  `config.yaml` (privat = geheim, nur Server; oeffentlich = Application Server Key).
+  Geraete-Abos und die Auswahl je Account liegen im Account-Archiv
+  (`push_subscriptions`, `push_prefs`). Der Daemon versendet bei eingehender
+  Live-Nachricht (1:1 + Raum) via VAPID; abgelaufene Abos (HTTP 404/410) werden entfernt.
+- Voraussetzungen: sicherer Kontext (HTTPS); auf iPhone ab iOS 16.4 nur als zum
+  Home-Bildschirm hinzugefuegte App. Ohne konfigurierte VAPID-Schluessel ist Push
+  vollstaendig deaktiviert (keine Glocke).
+
 ## Nicht-funktionale Anforderungen
 
 - **Mandantentrennung:** Je Account ein eigenes Archiv; ein Nutzer hat ausschliesslich

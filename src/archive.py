@@ -182,3 +182,31 @@ class MessageArchive:
             (jid, jid),
         ).fetchone()
         return row is not None
+
+    # Anzeigename fuer Push-Benachrichtigungen (Kontaktname / Raumname / lokaler Teil).
+    def display_name(self, jid):
+        row = self._conn.execute("SELECT name FROM contacts WHERE jid = ?", (jid,)).fetchone()
+        if row and row[0]:
+            return row[0]
+        row = self._conn.execute("SELECT name FROM muc_available WHERE room_jid = ?", (jid,)).fetchone()
+        if row and row[0]:
+            return row[0]
+        return (jid or "").split("@")[0]
+
+    # --- Web-Push -----------------------------------------------------------
+
+    def push_pref_enabled(self, partner_jid):
+        row = self._conn.execute(
+            "SELECT enabled FROM push_prefs WHERE partner_jid = ?", (partner_jid,)
+        ).fetchone()
+        return bool(row and row[0])
+
+    def push_subscriptions(self):
+        rows = self._conn.execute(
+            "SELECT endpoint, p256dh, auth FROM push_subscriptions"
+        ).fetchall()
+        return [{"endpoint": r[0], "p256dh": r[1], "auth": r[2]} for r in rows]
+
+    def delete_push_subscription(self, endpoint):
+        self._conn.execute("DELETE FROM push_subscriptions WHERE endpoint = ?", (endpoint,))
+        self._conn.commit()
