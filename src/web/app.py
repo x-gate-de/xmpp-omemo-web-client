@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.5.0
+# Version: 2.6.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -413,12 +413,12 @@ def _mark_read(db_path, partner):
 # --- Login / Logout ---------------------------------------------------------
 
 @app.get("/login", response_class=HTMLResponse)
-def login_form(request: Request, error: str = ""):
+def login_form(request: Request, error: str = "", deleted: str = ""):
     if request.session.get("jid"):
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     pending = request.session.get("pending")
     return _env.get_template("login.html").render(
-        default_server=_xmpp.get("default_host", ""), error=error,
+        default_server=_xmpp.get("default_host", ""), error=error, deleted=bool(deleted),
         waiting=bool(pending), pending_jid=pending or "",
     )
 
@@ -482,6 +482,24 @@ def logout(request: Request):
     # Nur die Session beenden; die Hintergrund-Archivierung laeuft weiter.
     request.session.clear()
     return RedirectResponse(url="/login", status_code=status.HTTP_303_SEE_OTHER)
+
+
+# Bestaetigungsseite fuer die Account-Loeschung ("Willst du das wirklich?").
+@app.get("/settings/delete", response_class=HTMLResponse)
+def delete_account_confirm(acc: dict = Depends(require_account)):
+    return _env.get_template("delete_account.html").render(
+        nav_active="", account_jid=acc["jid"], account_state=_account_state(acc["jid"]),
+    )
+
+
+# Loescht den eigenen Account und alle gespeicherten Daten auf diesem Server.
+# Die Web-UI merkt die Loeschung nur vor; der Daemon-Manager trennt die Verbindung
+# und entfernt das Account-Verzeichnis (kein offener DB-Zugriff). Danach Abmeldung.
+@app.post("/settings/delete")
+def delete_account(request: Request, acc: dict = Depends(require_account)):
+    _registry.request_deletion(acc["jid"])
+    request.session.clear()
+    return RedirectResponse(url="/login?deleted=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # Schaltet "immer online" fuer den eigenen Account um (enabled-Flag).

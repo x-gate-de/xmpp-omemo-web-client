@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/manager.py
 # Autor: Torben Belz
-# Version: 1.0.0
+# Version: 1.1.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Account-Manager fuer den Multi-User-Betrieb: haelt je aktivem Account eine
@@ -16,6 +16,7 @@
 
 import asyncio
 import logging
+import shutil
 
 from .daemon import build_daemon
 
@@ -101,6 +102,21 @@ class AccountManager:
                 for jid in list(self._bots):
                     if jid not in wanted:
                         self._disconnect(jid)
+                # Vorgemerkte Loeschungen ausfuehren -- erst wenn der Bot getrennt ist
+                # (kein offener Zugriff mehr auf die Account-Daten).
+                for jid in self._registry.pending_deletions():
+                    if jid not in self._bots:
+                        self._delete_account(jid)
             except Exception as e:
                 logger.error("Manager-Schleife fehlgeschlagen: %s", type(e).__name__)
             await asyncio.sleep(3)
+
+    # Loescht das Account-Verzeichnis (Archiv, OMEMO-State, Spool) und den Account-
+    # Eintrag. Unwiderruflich -- nur nach ausdruecklicher Bestaetigung in der Web-UI.
+    def _delete_account(self, jid):
+        try:
+            shutil.rmtree(self._registry.account_dir(jid), ignore_errors=True)
+            self._registry.finalize_deletion(jid)
+            logger.info("Account und Daten geloescht: %s", jid)
+        except Exception as e:
+            logger.error("Account-Loeschung %s fehlgeschlagen: %s", jid, type(e).__name__)

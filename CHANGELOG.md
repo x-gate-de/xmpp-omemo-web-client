@@ -1,8 +1,14 @@
 # Changelog
 
 ## [Unreleased]
+- Settings menu + account deletion: the "Design" menu is now "Settings" (gear
+  icon). A new entry "Delete account and stored data on this server" leads to a
+  confirmation page ("Are you sure?"). On confirm, the account (encrypted
+  credentials), the message archive and the OMEMO state are irreversibly deleted
+  and the user is logged out. The web UI marks the deletion (disables the account);
+  the daemon manager disconnects and removes the account directory only once no DB
+  handle is open (no race on open files).
 - Optional: MAM backfill to cover daemon downtime.
-- Optional: account deletion (remove stored credentials + archive).
 
 ## [1.1.0] - 2026-06-15
 - Readable send errors + dismissable failures + version hint: encryption/send

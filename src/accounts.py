@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/accounts.py
 # Autor: Torben Belz
-# Version: 1.1.0
+# Version: 1.2.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Account-Registry fuer den Multi-User-Betrieb: speichert je XMPP-Account die
@@ -67,6 +67,13 @@ class AccountRegistry:
                     conn.execute("ALTER TABLE accounts ADD COLUMN auth_state TEXT NOT NULL DEFAULT 'pending'")
                 except sqlite3.OperationalError:
                     pass
+            # Vorgemerkte Account-Loeschungen (Web stellt ein, Manager fuehrt aus).
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS pending_deletions ("
+                "  jid TEXT PRIMARY KEY,"
+                "  requested_ts REAL NOT NULL"
+                ")"
+            )
             conn.commit()
         finally:
             conn.close()
@@ -130,6 +137,32 @@ class AccountRegistry:
 
     def set_enabled(self, jid, enabled):
         self._exec("UPDATE accounts SET enabled = ? WHERE jid = ?", (1 if enabled else 0, jid))
+
+    # Account-Verzeichnis (eigenes Archiv + OMEMO-State + Spool).
+    def account_dir(self, jid):
+        return os.path.join(self._users_dir, account_slug(jid))
+
+    # Markiert einen Account zur vollstaendigen Loeschung: deaktiviert ihn sofort
+    # (der Manager trennt die Verbindung) und merkt ihn vor. Die Daten werden danach
+    # vom Manager geloescht, sobald die Verbindung getrennt ist (kein offener DB-Zugriff).
+    def request_deletion(self, jid):
+        self._exec("UPDATE accounts SET enabled = 0 WHERE jid = ?", (jid,))
+        self._exec(
+            "INSERT INTO pending_deletions (jid, requested_ts) VALUES (?, ?) "
+            "ON CONFLICT(jid) DO NOTHING",
+            (jid, time.time()),
+        )
+
+    def pending_deletions(self):
+        conn = self._open()
+        try:
+            return [r["jid"] for r in conn.execute("SELECT jid FROM pending_deletions").fetchall()]
+        finally:
+            conn.close()
+
+    def finalize_deletion(self, jid):
+        self._exec("DELETE FROM accounts WHERE jid = ?", (jid,))
+        self._exec("DELETE FROM pending_deletions WHERE jid = ?", (jid,))
 
     def set_auth_state(self, jid, state):
         self._exec("UPDATE accounts SET auth_state = ? WHERE jid = ?", (state, jid))
