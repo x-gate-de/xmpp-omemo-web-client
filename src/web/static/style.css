@@ -352,6 +352,25 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .btn:hover { background: var(--primary-hover); }
 .btn.ghost { background: var(--surface-2); color: var(--fg); }
 .btn.ghost:hover { background: color-mix(in srgb, var(--primary) 14%, var(--surface-2)); }
+.btn.danger { background: var(--danger); color: #fff; }
+.btn.danger:hover { background: color-mix(in srgb, var(--danger) 82%, #000); }
+
+/* Settings-Menue: Gefahrenzone (Account loeschen) */
+.design-danger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.danger-link { display: block; font-size: 0.78rem; color: var(--danger); text-decoration: none; line-height: 1.35; }
+.danger-link:hover { text-decoration: underline; }
+
+/* Bestaetigungsseite (Account-Loeschung) */
+.confirm-card {
+  max-width: 460px; margin: 6vh auto 0; padding: 26px 24px; text-align: center;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px; box-shadow: var(--shadow);
+}
+.confirm-icon { color: var(--danger); display: flex; justify-content: center; margin-bottom: 8px; }
+.confirm-card h1 { font-size: 1.3rem; margin: 0 0 12px; }
+.confirm-card p { color: var(--fg); line-height: 1.5; margin: 0 0 12px; }
+.confirm-note { color: var(--muted); font-size: 0.86rem; }
+.confirm-actions { display: flex; gap: 12px; justify-content: center; align-items: center; margin-top: 18px; }
+.login-ok { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); padding: 9px 12px; border-radius: 10px; font-size: 0.86rem; margin-bottom: 12px; }
 .tag-joined { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 0.82rem; font-weight: 600; }
 .tag-joined svg { width: 15px; height: 15px; }
 

@@ -185,6 +185,17 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
   `Cache-Control: private` und `nosniff`.
 - In unverschluesselten Gruppenraeumen sind Anhaenge nicht vorgesehen.
 
+### F20 — Account und Daten loeschen
+- Im Settings-Menue kann der angemeldete Nutzer seinen Account und alle auf dem
+  Server gespeicherten Daten loeschen. Vor der Ausfuehrung erscheint eine
+  Bestaetigungsseite ("Willst du das wirklich?").
+- Bei Bestaetigung wird der Account in der Registry zur Loeschung vorgemerkt und
+  sofort deaktiviert; der Nutzer wird abgemeldet. Der Daemon-Manager trennt die
+  Verbindung und entfernt anschliessend das Account-Verzeichnis (Klartext-Archiv,
+  OMEMO-State, Spool) sowie den Registry-Eintrag (verschluesselte Zugangsdaten) --
+  erst nachdem kein offener DB-Zugriff mehr besteht.
+- Unwiderruflich. Bereits an Gegenstellen zugestellte Nachrichten sind nicht betroffen.
+
 ## Nicht-funktionale Anforderungen
 
 - **Mandantentrennung:** Je Account ein eigenes Archiv; ein Nutzer hat ausschliesslich
