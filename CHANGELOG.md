@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- Optional: MAM backfill to cover daemon downtime.
+- Optional: account deletion (remove stored credentials + archive).
+
+## [1.1.0] - 2026-06-15
 - Readable send errors + dismissable failures + version hint: encryption/send
   errors now show a readable message (e.g. "recipient has no trusted OMEMO device")
   instead of the technical exception name; failed outbox jobs can be dismissed via
@@ -59,8 +63,6 @@
   Click the chip to reopen. A new incoming message (detected via `last_ts`)
   re-expands the tile automatically. The selection is stored per browser in
   localStorage.
-- Optional: MAM backfill to cover daemon downtime.
-- Optional: account deletion (remove stored credentials + archive).
 
 ## [1.0.0] - 2026-06-13 - First stable release
 First complete release of the always-online OMEMO archiver with web UI.
