@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- Display attachments (OMEMO media, XEP-0454): images from 1:1 chats arrive as
+  `aesgcm://` links (the file is AES-256-GCM-encrypted on the HTTP upload server,
+  key+IV in the URL fragment). A new decrypting media proxy `/media/{msg_id}`
+  (session-auth) fetches the file and serves the plaintext; images render inline,
+  other files are linked. The list shows `[Bild]`/`[Anhang]` instead of the raw
+  link. Security: fetch only from the account's own XMPP domain (SSRF guard),
+  30 MB limit, nosniff, Cache-Control private; key material stays server-side.
 - Bugfix: the conversation list stopped live-updating whenever any reply field
   had focus — even an empty one. As a result a tab froze when the cursor sat in an
   empty "Reply …" field (visible across machines: one window live, the other

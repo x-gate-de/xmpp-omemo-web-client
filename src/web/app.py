@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.2.1
+# Version: 2.3.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -16,12 +16,16 @@
 
 import os
 import sqlite3
+import ssl
 import time
+import urllib.request
 from datetime import datetime
+from urllib.parse import urlparse
 
 import jinja2
-from fastapi import Depends, FastAPI, Form, Request, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from fastapi import Depends, FastAPI, Form, HTTPException, Request, status
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -198,11 +202,47 @@ def _account_state(jid):
     return {"enabled": True, "label": "Verbindet …", "cls": "connecting", "next": 0}
 
 
+# --- Anhaenge (OMEMO-Media, XEP-0454) ---------------------------------------
+# Bilder/Dateien werden als "aesgcm://host/pfad#<iv+key-hex>" verschickt: die Datei
+# liegt AES-256-GCM-verschluesselt auf dem HTTP-Upload-Server, Schluessel+IV stehen
+# im URL-Fragment. Der OMEMO-Layer hat den Body bereits zu dieser URL entschluesselt.
+_MEDIA_IMG_EXT = ("jpg", "jpeg", "png", "gif", "webp", "bmp")
+_MEDIA_CT = {
+    "jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "gif": "image/gif",
+    "webp": "image/webp", "bmp": "image/bmp", "svg": "image/svg+xml",
+    "mp4": "video/mp4", "webm": "video/webm", "mov": "video/quicktime",
+    "mp3": "audio/mpeg", "ogg": "audio/ogg", "oga": "audio/ogg", "wav": "audio/wav",
+    "pdf": "application/pdf", "txt": "text/plain",
+}
+_MEDIA_MAX = 30 * 1024 * 1024  # 30 MB Obergrenze pro Anhang
+
+
+def _media_info(body, msg_id):
+    # Erkennt eine reine OMEMO-Media-URL als Anhang. Nur ein einzelnes URL-Token gilt
+    # als Anhang (URL + Freitext lassen wir als normalen Text stehen).
+    if not body:
+        return None
+    b = body.strip()
+    if not b.lower().startswith("aesgcm://") or any(ch in b for ch in (" ", "\n", "\t")):
+        return None
+    name = b.split("#", 1)[0].rstrip("/").rsplit("/", 1)[-1] or "datei"
+    ext = name.rsplit(".", 1)[-1].lower() if "." in name else ""
+    return {"url": "/media/%d" % msg_id, "name": name,
+            "kind": "image" if ext in _MEDIA_IMG_EXT else "file"}
+
+
+def _media_label(body):
+    info = _media_info(body, 0)
+    if not info:
+        return None
+    return "[Bild]" if info["kind"] == "image" else "[Anhang]"
+
+
 def _preview(last_body, last_dir, last_dec):
     if not last_dec:
         text = "Verschluesselte Nachricht"
     else:
-        text = (last_body or "").replace("\n", " ").strip() or "(leer)"
+        text = _media_label(last_body) or ((last_body or "").replace("\n", " ").strip() or "(leer)")
     if len(text) > 60:
         text = text[:60] + "…"
     return ("Du: " + text) if last_dir == "out" else text
@@ -218,7 +258,7 @@ def _recent(conn, partner, n=8):
     out = []
     for r in reversed(rows):
         if r["decrypted"]:
-            text = (r["body"] or "").replace("\n", " ").strip() or "(leer)"
+            text = _media_label(r["body"]) or ((r["body"] or "").replace("\n", " ").strip() or "(leer)")
         else:
             text = "[verschluesselt]"
         if len(text) > 240:
@@ -290,8 +330,12 @@ def _split_quote(body):
 
 def _msg_dict(r):
     quote, text = _split_quote(r["body"])
+    media = _media_info(r["body"], r["id"]) if r["decrypted"] else None
+    if media:
+        # Anhang ersetzt den (sonst als Rohtext sichtbaren) aesgcm-Link.
+        quote, text = None, ""
     return {"id": r["id"], "direction": r["direction"], "body": r["body"],
-            "quote": quote, "text": text,
+            "quote": quote, "text": text, "media": media,
             "decrypted": bool(r["decrypted"]), "ts": _fmt_ts(r["ts_received"]),
             "ts_raw": r["ts_received"], "sender": r["sender"], "status": r["status"]}
 
@@ -515,6 +559,64 @@ def api_messages(partner: str, after_id: int = 0, acc: dict = Depends(require_ac
     if msgs:
         _mark_read(db_path, partner)
     return {"messages": msgs, "pending": _pending(db_path, partner)}
+
+
+def _account_domain(jid):
+    return jid.split("@", 1)[1].lower() if "@" in jid else ""
+
+
+# Laedt die verschluesselte Datei vom HTTP-Upload-Server und entschluesselt sie
+# (AES-256-GCM). Schluessel+IV stammen aus dem URL-Fragment, der GCM-Tag haengt
+# (von cryptography erwartet) am Ciphertext.
+def _media_fetch_decrypt(body, allowed_domain):
+    u = urlparse(body.strip())
+    if u.scheme != "aesgcm" or not u.fragment or not u.netloc:
+        raise HTTPException(status_code=404)
+    host = (u.hostname or "").lower()
+    # SSRF-Schutz: ausschliesslich von der eigenen XMPP-Domain laden.
+    if not allowed_domain or not (host == allowed_domain or host.endswith("." + allowed_domain)):
+        raise HTTPException(status_code=403)
+    try:
+        raw = bytes.fromhex(u.fragment)
+    except ValueError:
+        raise HTTPException(status_code=404)
+    if len(raw) < 33:  # mind. 1 Byte IV + 32 Byte Key
+        raise HTTPException(status_code=404)
+    key, iv = raw[-32:], raw[:-32]
+    https = "https://%s%s" % (u.netloc, u.path)
+    try:
+        req = urllib.request.Request(https, headers={"User-Agent": "x-gate-chat"})
+        with urllib.request.urlopen(req, timeout=20, context=ssl.create_default_context()) as resp:
+            data = resp.read(_MEDIA_MAX + 1)
+    except Exception:
+        raise HTTPException(status_code=502)
+    if len(data) > _MEDIA_MAX:
+        raise HTTPException(status_code=413)
+    try:
+        plain = AESGCM(key).decrypt(iv, data, None)
+    except Exception:
+        raise HTTPException(status_code=502)
+    ext = u.path.rsplit(".", 1)[-1].lower() if "." in u.path else ""
+    return plain, _MEDIA_CT.get(ext, "application/octet-stream")
+
+
+# Entschluesselter Media-Proxy: liest den Body der eigenen Nachricht (Auth ueber Session),
+# holt die verschluesselte Datei und liefert den Klartext aus. Schluessel bleiben serverseitig.
+@app.get("/media/{msg_id:int}")
+def media(msg_id: int, acc: dict = Depends(require_account)):
+    conn = _open_ro(acc["archive_path"])
+    try:
+        row = conn.execute("SELECT body, decrypted FROM messages WHERE id = ?", (msg_id,)).fetchone()
+    finally:
+        conn.close()
+    if not row or not row["decrypted"] or not row["body"]:
+        raise HTTPException(status_code=404)
+    data, ctype = _media_fetch_decrypt(row["body"], _account_domain(acc["jid"]))
+    return Response(content=data, media_type=ctype, headers={
+        "Cache-Control": "private, max-age=86400",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": "inline",
+    })
 
 
 @app.post("/c/{partner:path}/send")

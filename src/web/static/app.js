@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben Belz
-// Version: 1.5.1
+// Version: 1.6.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -10,6 +10,8 @@
 // - Schliessen von Chats (dauerhaft ausgeblendet, Daten bleiben; wiederherstellbar
 //   ueber "Geschlossene Chats" oder durch direktes Oeffnen).
 // - Relative Zeitangabe ("vor X Min") vor dem Zeitstempel der letzten Nachricht.
+// - Anhaenge (OMEMO-Media): Bilder werden inline angezeigt, Dateien verlinkt
+//   (Auslieferung entschluesselt ueber den /media-Proxy).
 // Hinweis:
 // - Nutzerinhalte werden ueber textContent eingefuegt (XSS-Schutz). SVG-Icons
 //   stammen aus statischen Markup-Konstanten, nicht aus Nutzerdaten.
@@ -101,7 +103,22 @@
     row.setAttribute("data-ts", m.ts || "");
     var bubble = el("div", "msg");
     if (m.sender && m.direction === "in") bubble.appendChild(el("span", "sender", m.sender));
-    if (m.decrypted) {
+    if (m.decrypted && m.media) {
+      // Anhang (entschluesselt ueber den /media-Proxy ausgeliefert).
+      var ml = document.createElement("a");
+      ml.href = m.media.url; ml.target = "_blank"; ml.rel = "noopener";
+      if (m.media.kind === "image") {
+        ml.className = "msg-media";
+        var img = document.createElement("img");
+        img.className = "msg-img"; img.src = m.media.url; img.loading = "lazy";
+        img.alt = m.media.name || "Bild";
+        ml.appendChild(img);
+      } else {
+        ml.className = "msg-file";
+        ml.textContent = "Anhang: " + (m.media.name || "Datei");
+      }
+      bubble.appendChild(ml);
+    } else if (m.decrypted) {
       if (m.quote) bubble.appendChild(el("div", "msg-quote", m.quote));
       bubble.appendChild(el("div", "msg-text", m.text || ""));
     } else {
