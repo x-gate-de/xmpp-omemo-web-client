@@ -65,7 +65,7 @@ def _asset_version():
 _env.globals["asset_ver"] = _asset_version()
 
 # Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog).
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
 _env.globals["app_version"] = APP_VERSION
 _env.globals["changelog_url"] = CHANGELOG_URL
