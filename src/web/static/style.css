@@ -366,8 +366,13 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 
 /* Settings-Menue: Gefahrenzone (Account loeschen) */
 .design-danger { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-.danger-link { display: block; font-size: 0.78rem; color: var(--danger); text-decoration: none; line-height: 1.35; }
-.danger-link:hover { text-decoration: underline; }
+.danger-link {
+  display: flex; align-items: center; gap: 9px; padding: 7px 9px; border-radius: 9px;
+  font-size: 0.84rem; color: var(--danger); text-decoration: none; line-height: 1.2;
+  transition: background .12s ease;
+}
+.danger-link svg { flex: none; }
+.danger-link:hover { background: color-mix(in srgb, var(--danger) 12%, transparent); }
 
 /* Bestaetigungsseite (Account-Loeschung) */
 .confirm-card {
