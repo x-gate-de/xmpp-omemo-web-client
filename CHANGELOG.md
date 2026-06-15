@@ -1,6 +1,12 @@
 # Changelog
 
 ## [Unreleased]
+- Bugfix: the conversation list stopped live-updating whenever any reply field
+  had focus — even an empty one. As a result a tab froze when the cursor sat in an
+  empty "Reply …" field (visible across machines: one window live, the other
+  frozen). Now the list only pauses while a non-empty draft is being typed; focus
+  on an empty field is preserved across the rebuild. Also: on an expired session
+  (HTTP 401) the page redirects to login instead of silently freezing.
 - MUC nick without the "-web" suffix: the archiver appeared in public rooms as
   "<user>-web", confusing other participants. Since it is just another resource
   of the same account and the server allows multi-session with the same nick, it
