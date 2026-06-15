@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben Belz
-# Version: 1.2.0
+# Version: 1.2.1
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -194,7 +194,8 @@ class ArchiverBot(ClientXMPP):
 
         if not namespaces:
             body = stanza["body"]
-            if not body:
+            # Leere Nachrichten (Chat-States/Marker ohne Inhalt) nicht archivieren.
+            if not body or not body.strip():
                 return
             if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True):
                 logger.info("Archiviert (plain, %s) %s", direction, partner_jid)
@@ -204,6 +205,10 @@ class ArchiverBot(ClientXMPP):
         try:
             message, _info = await xep_0384.decrypt_message(stanza)
             body = message["body"] or ""
+            # OMEMO-verschluesselte Chat-States/Marker entschluesseln zu leerem Body
+            # (von anderen eigenen Clients gesendet) -> nicht archivieren.
+            if not body.strip():
+                return
             if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True, namespace=namespace):
                 logger.info("Archiviert (omemo, %s) %s", direction, partner_jid)
         except Exception as e:
@@ -377,14 +382,18 @@ class ArchiverBot(ClientXMPP):
             ns = next(iter(namespaces))
             try:
                 decrypted, _info = await self["xep_0384"].decrypt_message(inner)
-                return self._archive.store(target, direction, decrypted["body"] or "", stanza_id,
+                body = decrypted["body"] or ""
+                # Leere Nachrichten (Chat-States/Marker ohne Inhalt) nicht archivieren.
+                if not body.strip():
+                    return False
+                return self._archive.store(target, direction, body, stanza_id,
                                            decrypted=True, namespace=ns, ts=ts)
             except Exception:
                 # Vor unserer Geraete-Existenz gesendet / Schluessel weg -> unlesbar.
                 return self._archive.store(target, direction, None, stanza_id,
                                            decrypted=False, namespace=ns, ts=ts)
         body = inner["body"]
-        if not body:
+        if not body or not body.strip():
             return False
         return self._archive.store(target, direction, body, stanza_id, decrypted=True, ts=ts)
 

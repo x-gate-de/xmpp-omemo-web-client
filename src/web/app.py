@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.1.0
+# Version: 2.2.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -147,6 +147,14 @@ def _highlight(text, q):
     return segs
 
 
+# Leere Nachrichten (z.B. von anderen eigenen Clients gesendete Chat-States/Marker,
+# die ohne echten Text als leerer Body ankamen) sollen nicht angezeigt werden.
+# Unlesbare Nachrichten (decrypted=0) bleiben sichtbar. `prefix` ist der Tabellen-Alias
+# inkl. Punkt ("", "m.", "x.") fuer die jeweilige Query.
+def _nonempty(prefix=""):
+    return "(%sdecrypted = 0 OR (%sbody IS NOT NULL AND trim(%sbody) <> ''))" % (prefix, prefix, prefix)
+
+
 # Volltextsuche ueber das (entschluesselte) Archiv des Nutzers.
 def _search(db_path, q, limit=100):
     pat = "%" + _like_escape(q) + "%"
@@ -204,7 +212,7 @@ def _preview(last_body, last_dir, last_dec):
 def _recent(conn, partner, n=8):
     rows = conn.execute(
         "SELECT direction, body, decrypted, sender FROM messages "
-        "WHERE partner_jid = ? ORDER BY id DESC LIMIT ?",
+        "WHERE partner_jid = ? AND " + _nonempty() + " ORDER BY id DESC LIMIT ?",
         (partner, n),
     ).fetchall()
     out = []
@@ -232,13 +240,13 @@ def _conv_items(db_path):
             "  SUM(CASE WHEN m.direction = 'in' AND m.ts_received > "
             "      COALESCE((SELECT last_read_ts FROM read_state r WHERE r.partner_jid = m.partner_jid), 0) "
             "    THEN 1 ELSE 0 END) AS unread, "
-            "  (SELECT body FROM messages x WHERE x.partner_jid = m.partner_jid ORDER BY x.id DESC LIMIT 1) AS last_body, "
-            "  (SELECT direction FROM messages x WHERE x.partner_jid = m.partner_jid ORDER BY x.id DESC LIMIT 1) AS last_dir, "
-            "  (SELECT decrypted FROM messages x WHERE x.partner_jid = m.partner_jid ORDER BY x.id DESC LIMIT 1) AS last_dec, "
+            "  (SELECT body FROM messages x WHERE x.partner_jid = m.partner_jid AND " + _nonempty("x.") + " ORDER BY x.id DESC LIMIT 1) AS last_body, "
+            "  (SELECT direction FROM messages x WHERE x.partner_jid = m.partner_jid AND " + _nonempty("x.") + " ORDER BY x.id DESC LIMIT 1) AS last_dir, "
+            "  (SELECT decrypted FROM messages x WHERE x.partner_jid = m.partner_jid AND " + _nonempty("x.") + " ORDER BY x.id DESC LIMIT 1) AS last_dec, "
             "  (SELECT name FROM contacts c WHERE c.jid = m.partner_jid) AS contact_name, "
             "  (SELECT name FROM muc_available a WHERE a.room_jid = m.partner_jid) AS room_name, "
             "  EXISTS(SELECT 1 FROM mucs g WHERE g.room_jid = m.partner_jid) AS is_room "
-            "FROM messages m GROUP BY m.partner_jid ORDER BY last_ts DESC"
+            "FROM messages m WHERE " + _nonempty("m.") + " GROUP BY m.partner_jid ORDER BY last_ts DESC"
         ).fetchall()
         items = []
         for r in rows:
@@ -294,7 +302,7 @@ def _messages(db_path, partner, after_id=0):
     try:
         rows = conn.execute(
             "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
-            "WHERE partner_jid = ? AND id > ? ORDER BY id ASC",
+            "WHERE partner_jid = ? AND id > ? AND " + _nonempty() + " ORDER BY id ASC",
             (partner, after_id),
         ).fetchall()
     finally:
@@ -310,14 +318,14 @@ def _messages_page(db_path, partner, before_ts=None, before_id=None, limit=50):
         if before_ts is None:
             rows = conn.execute(
                 "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
-                "WHERE partner_jid = ? ORDER BY ts_received DESC, id DESC LIMIT ?",
+                "WHERE partner_jid = ? AND " + _nonempty() + " ORDER BY ts_received DESC, id DESC LIMIT ?",
                 (partner, limit),
             ).fetchall()
         else:
             rows = conn.execute(
                 "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
                 "WHERE partner_jid = ? AND (ts_received < ? OR (ts_received = ? AND id < ?)) "
-                "ORDER BY ts_received DESC, id DESC LIMIT ?",
+                "AND " + _nonempty() + " ORDER BY ts_received DESC, id DESC LIMIT ?",
                 (partner, before_ts, before_ts, before_id, limit),
             ).fetchall()
     finally:
