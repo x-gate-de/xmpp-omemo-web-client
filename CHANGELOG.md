@@ -1,6 +1,10 @@
 # Changelog
 
 ## [Unreleased]
+- User guide (German) + help link: step-by-step guide ANLEITUNG.md (login, install
+  to phone, read/send, attachments, search, minimize/close, rooms, encryption/
+  verification, push, settings, account deletion, limits). The Settings menu links
+  to it ("Hilfe & Anleitung").
 - Push notifications (Web Push, selective per chat): enable push per person/room via
   the bell in the chat header. Only selected chats trigger a notification, so busy
   rooms stay silent. Content-less for privacy: the notification only shows "New

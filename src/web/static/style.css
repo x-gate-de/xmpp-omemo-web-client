@@ -425,7 +425,9 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
   box-shadow: var(--shadow); padding: 13px 15px; min-width: 212px;
 }
 .design-row + .design-row { margin-top: 13px; }
-.design-foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); text-align: center; }
+.design-foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); text-align: center; display: flex; flex-direction: column; gap: 5px; }
+.help-link { font-size: 0.8rem; font-weight: 600; color: var(--primary); text-decoration: none; }
+.help-link:hover { text-decoration: underline; }
 .ver-link { font-size: 0.72rem; color: var(--muted); text-decoration: none; }
 .ver-link:hover { color: var(--primary); text-decoration: underline; }
 .design-label { display: block; font-size: 0.72rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin-bottom: 8px; }

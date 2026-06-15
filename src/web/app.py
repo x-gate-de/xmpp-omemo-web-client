@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.7.0
+# Version: 2.7.1
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -67,8 +67,10 @@ _env.globals["asset_ver"] = _asset_version()
 # Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog).
 APP_VERSION = "1.2.0"
 CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
+HELP_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/ANLEITUNG.md"
 _env.globals["app_version"] = APP_VERSION
 _env.globals["changelog_url"] = CHANGELOG_URL
+_env.globals["help_url"] = HELP_URL
 
 # Web Push: aktiv, wenn VAPID-Schluessel konfiguriert sind.
 _push = config.get("push") or {}
