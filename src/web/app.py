@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.2.0
+# Version: 2.2.1
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -398,8 +398,11 @@ def login(request: Request, jid: str = Form(...), password: str = Form(...), ser
     # Sonst (neuer Account, oder zuvor fehlgeschlagen/deaktiviert): anlegen/aktualisieren;
     # der Daemon-Manager validiert ueber die echte XMPP-Verbindung (kein Connect aus dem Web).
     local = jid.split("@")[0]
+    # MUC-Nick = reiner Username. Der Archivierer ist nur eine weitere Ressource
+    # desselben Accounts; der Server erlaubt Multi-Session mit gleichem Nick, daher
+    # kein Konflikt mit den anderen Geraeten des Nutzers (kein "-web"-Suffix noetig).
     _registry.upsert(jid, password, host=host, port=port,
-                     resource=_xmpp.get("resource", "archiver"), muc_nick=f"{local}-web")
+                     resource=_xmpp.get("resource", "archiver"), muc_nick=local)
     _ensure_db(_registry.archive_path(jid))
     request.session.pop("jid", None)
     request.session["pending"] = jid
