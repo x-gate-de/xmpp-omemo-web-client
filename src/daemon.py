@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben Belz
-# Version: 1.4.0
+# Version: 1.4.1
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -19,6 +19,7 @@
 # -----------------------------------------------------------------------------
 
 import asyncio
+import base64
 import datetime
 import io
 import json
@@ -27,6 +28,7 @@ import os
 import sys
 import time
 
+from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 try:
     from pywebpush import webpush, WebPushException
@@ -112,9 +114,20 @@ class ArchiverBot(ClientXMPP):
 
         # Web Push (optional): nur aktiv, wenn pywebpush vorhanden und VAPID konfiguriert.
         push = config.get("push") or {}
-        self._vapid_private = push.get("vapid_private_key") or ""
         self._vapid_subject = push.get("vapid_subject") or "mailto:admin@example.com"
-        self._push_enabled = bool(webpush and self._vapid_private)
+        self._vapid_key = ""
+        self._push_enabled = bool(webpush and (push.get("vapid_private_key") or ""))
+        if self._push_enabled:
+            # py_vapid/pywebpush erwarten den privaten Schluessel als RAW (32 Byte,
+            # base64url) -- nicht als PEM. Daher den PEM-Schluessel einmal umwandeln.
+            try:
+                k = serialization.load_pem_private_key(
+                    push["vapid_private_key"].encode(), password=None)
+                raw = k.private_numbers().private_value.to_bytes(32, "big")
+                self._vapid_key = base64.urlsafe_b64encode(raw).rstrip(b"=").decode()
+            except Exception as e:
+                logger.error("VAPID-Schluessel ungueltig, Push deaktiviert: %s", type(e).__name__)
+                self._push_enabled = False
 
         self.register_plugin("xep_0030")  # Service Discovery
         self.register_plugin("xep_0060")  # PubSub
@@ -417,7 +430,7 @@ class ArchiverBot(ClientXMPP):
         info = {"endpoint": sub["endpoint"], "keys": {"p256dh": sub["p256dh"], "auth": sub["auth"]}}
         try:
             webpush(subscription_info=info, data=payload,
-                    vapid_private_key=self._vapid_private, vapid_claims={"sub": self._vapid_subject})
+                    vapid_private_key=self._vapid_key, vapid_claims={"sub": self._vapid_subject})
             return False
         except WebPushException as e:
             code = getattr(getattr(e, "response", None), "status_code", None)
