@@ -1,6 +1,9 @@
 # Changelog
 
 ## [Unreleased]
+- Optional: MAM backfill to cover daemon downtime.
+
+## [1.3.0] - 2026-06-15
 - User guide (German) + help link: step-by-step guide ANLEITUNG.md (login, install
   to phone, read/send, attachments, search, minimize/close, rooms, encryption/
   verification, push, settings, account deletion, limits). The Settings menu links
@@ -14,7 +17,6 @@
   (push_subscriptions/push_prefs), daemon-side send on incoming live messages (1:1 +
   room), pruning of expired subscriptions (HTTP 404/410). Requires HTTPS; on iPhone
   (iOS 16.4+) only as an app added to the Home Screen. New dependency: pywebpush.
-- Optional: MAM backfill to cover daemon downtime.
 
 ## [1.2.0] - 2026-06-15
 - Settings menu + account deletion: the "Design" menu is now "Settings" (gear
