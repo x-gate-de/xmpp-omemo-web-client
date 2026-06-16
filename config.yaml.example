@@ -18,6 +18,11 @@ xmpp:
   # Ressourcenname, unter dem ein Account-Daemon erscheint.
   resource: "archiver"
   tls_verify: true
+  # Nur Logins fuer diese JID-Domains zulassen (Liste). Leer = alle erlaubt.
+  # Empfohlen bei oeffentlichem Betrieb: verhindert, dass der Chat-Server auf
+  # Zuruf beliebige XMPP-Server kontaktiert, und buendelt Brute-Force auf die
+  # eigene Domain. Beispiel: ["example.com"]
+  allowed_domains: []
 
 omemo:
   # Trust-Politik: "btbv" (Blind Trust Before Verification) oder "manual".
@@ -34,6 +39,11 @@ security:
   fernet_key: "HIER-FERNET-KEY-EINTRAGEN"
   # Schluessel zum Signieren der Web-Session-Cookies.
   session_secret: "HIER-SESSION-SECRET-EINTRAGEN"
+  # Login-Bremse (Brute-Force / Schutz des XMPP-Servers vor Login-Fluten):
+  login_window: 300        # Beobachtungsfenster je IP (Sekunden)
+  login_max_per_ip: 5      # max. Fehlversuche je IP im Fenster
+  validation_window: 60    # Fenster fuer XMPP-Validierungen (Sekunden)
+  validation_max: 5        # max. XMPP-Validierungen pro Fenster (global)
 
 web:
   bind_host: "127.0.0.1"

@@ -225,6 +225,12 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
   oder Schluesselmaterial. Audit-relevant: Verbindungsstatus, Geraete-Trust-Entscheidungen,
   Entschluesselungsfehler.
 - **Sicherheit:** `config.yaml` und OMEMO-State mit Dateirechten `0600`. TLS-Verifikation aktiv.
+- **Login-Haertung (oeffentlicher Betrieb):** Da der Login unbekannte JIDs ueber eine
+  echte XMPP-Verbindung des Chat-Servers validiert und alle Logins sich eine Quell-IP
+  teilen, ist der Login gedrosselt: Bremse je Client-IP, globale Drossel der
+  XMPP-Validierungen und optionale JID-Domain-Whitelist (`xmpp.allowed_domains`) -
+  fremde Domains werden ohne XMPP-Kontakt abgewiesen. Bekannte Accounts mit falschem
+  Passwort werden ohne XMPP-Kontakt abgelehnt. Session-Cookie mit Secure-Flag.
 - **Wiederanlauf:** Nach Crash/Neustart nahtlose Fortsetzung ohne Neuregistrierung des Geraets.
 
 ## Abgrenzung (bewusst NICHT im Umfang)

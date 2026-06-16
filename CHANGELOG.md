@@ -1,6 +1,13 @@
 # Changelog
 
 ## [Unreleased]
+- Login hardening (public deployment): per-IP brute-force brake (default 5 failed
+  attempts / 5 min) and a global throttle on triggered XMPP validations (default
+  5/min) -> prevents login floods from getting the chat server fail2ban-blocked at
+  the XMPP server (all logins share one source IP). Optional JID domain allowlist
+  (xmpp.allowed_domains): only your own domain(s) are allowed, foreign JIDs are
+  rejected without contacting any XMPP server. Session cookie now Secure (HTTPS
+  only). Thresholds configurable in config.yaml.
 - Optional: MAM backfill to cover daemon downtime.
 
 ## [1.4.0] - 2026-06-15
