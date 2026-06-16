@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.7.1
+# Version: 2.8.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -17,6 +17,7 @@
 import os
 import sqlite3
 import ssl
+import threading
 import time
 import urllib.request
 import uuid
@@ -43,7 +44,8 @@ _registry = AccountRegistry(
 )
 
 app = FastAPI(title="Chat", docs_url=None, redoc_url=None, openapi_url=None)
-app.add_middleware(SessionMiddleware, secret_key=config["security"]["session_secret"], same_site="lax")
+app.add_middleware(SessionMiddleware, secret_key=config["security"]["session_secret"],
+                   same_site="lax", https_only=True)
 app.mount("/static", StaticFiles(directory=os.path.join(os.path.dirname(__file__), "static")), name="static")
 
 _env = jinja2.Environment(
@@ -76,6 +78,58 @@ _env.globals["help_url"] = HELP_URL
 _push = config.get("push") or {}
 _PUSH_PUBLIC = _push.get("vapid_public_key") or ""
 _PUSH_ENABLED = bool(_PUSH_PUBLIC and (_push.get("vapid_private_key") or ""))
+
+
+# --- Login-Haertung (Brute-Force / Schutz des XMPP-Servers) ------------------
+# Der oeffentliche Login validiert unbekannte JIDs ueber eine echte XMPP-Verbindung
+# des Chat-Servers. Alle Logins teilen sich EINE Quell-IP -> ohne Bremse koennte ein
+# Angreifer den Chat-Server beim (fremdbetriebenen) XMPP-Server in fail2ban laufen
+# lassen und damit alle aussperren. Daher: je-IP-Bremse + globale Drossel der
+# XMPP-Validierungen + optionale Domain-Whitelist (nur diese JID-Domains zulassen).
+_sec = config.get("security") or {}
+_LOGIN_WINDOW = int(_sec.get("login_window", 300))          # Beobachtungsfenster (s)
+_LOGIN_MAX_PER_IP = int(_sec.get("login_max_per_ip", 5))    # Fehlversuche je IP/Fenster
+_VALIDATION_WINDOW = int(_sec.get("validation_window", 60))  # Fenster fuer XMPP-Validierungen
+_VALIDATION_MAX = int(_sec.get("validation_max", 5))        # max. XMPP-Validierungen/Fenster (global)
+_ALLOWED_DOMAINS = [d.strip().lower() for d in (_xmpp.get("allowed_domains") or []) if d and d.strip()]
+
+_login_lock = threading.Lock()
+_login_attempts = {}    # ip -> [timestamps der Fehlversuche]
+_validation_times = []  # globale Zeitpunkte der ausgeloesten XMPP-Validierungen
+
+
+def _client_ip(request):
+    # Echte Client-IP hinter traefik/nginx (linkester Eintrag in X-Forwarded-For).
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "?"
+
+
+def _ip_blocked(ip):
+    now = time.time()
+    with _login_lock:
+        att = [t for t in _login_attempts.get(ip, []) if now - t < _LOGIN_WINDOW]
+        _login_attempts[ip] = att
+        return len(att) >= _LOGIN_MAX_PER_IP
+
+
+def _record_fail(ip):
+    with _login_lock:
+        _login_attempts.setdefault(ip, []).append(time.time())
+
+
+# Globale Drossel: begrenzt, wie oft der Chat-Server ueberhaupt eine XMPP-Validierung
+# anstoesst (= Schutz des XMPP-Servers vor Login-Fluten ueber unsere eine Quell-IP).
+def _validation_allowed():
+    now = time.time()
+    with _login_lock:
+        recent = [t for t in _validation_times if now - t < _VALIDATION_WINDOW]
+        _validation_times[:] = recent
+        if len(recent) >= _VALIDATION_MAX:
+            return False
+        _validation_times.append(now)
+        return True
 
 
 # --- Authentifizierung ------------------------------------------------------
@@ -420,18 +474,19 @@ def _mark_read(db_path, partner):
 # --- Login / Logout ---------------------------------------------------------
 
 @app.get("/login", response_class=HTMLResponse)
-def login_form(request: Request, error: str = "", deleted: str = ""):
+def login_form(request: Request, error: str = "", deleted: str = "", throttle: str = ""):
     if request.session.get("jid"):
         return RedirectResponse(url="/", status_code=status.HTTP_303_SEE_OTHER)
     pending = request.session.get("pending")
     return _env.get_template("login.html").render(
         default_server=_xmpp.get("default_host", ""), error=error, deleted=bool(deleted),
-        waiting=bool(pending), pending_jid=pending or "",
+        throttle=bool(throttle), waiting=bool(pending), pending_jid=pending or "",
     )
 
 
 @app.post("/login")
 def login(request: Request, jid: str = Form(...), password: str = Form(...), server: str = Form("")):
+    ip = _client_ip(request)
     jid = (jid or "").strip()
     server = (server or "").strip() or _xmpp.get("default_host", "")
     host, port = server, _xmpp.get("default_port", 5222)
@@ -441,7 +496,12 @@ def login(request: Request, jid: str = Form(...), password: str = Form(...), ser
     if not jid or not password:
         return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
 
+    # Zu viele Fehlversuche von dieser IP -> bremsen (keine weitere Pruefung).
+    if _ip_blocked(ip):
+        return RedirectResponse(url="/login?throttle=1", status_code=status.HTTP_303_SEE_OTHER)
+
     # Schnellpfad: bereits validierter, aktiver Account mit unveraendertem Passwort.
+    # (Kein XMPP-Kontakt -> legitime Nutzer sind von der Drossel nicht betroffen.)
     if _registry.verified_match(jid, password):
         request.session.pop("pending", None)
         request.session["jid"] = jid
@@ -449,9 +509,24 @@ def login(request: Request, jid: str = Form(...), password: str = Form(...), ser
 
     # Schutz: Ist der Account aktiv und validiert, aber das Passwort stimmt nicht,
     # wird abgelehnt OHNE die laufende Verbindung/das gespeicherte Passwort zu aendern
-    # (verhindert, dass ein falscher Login einen aktiven Account stoert).
+    # (verhindert, dass ein falscher Login einen aktiven Account stoert). Kein XMPP-Hit.
     if _registry.is_ok(jid):
+        _record_fail(ip)
         return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Ab hier wuerde der Daemon-Manager die JID per echter XMPP-Verbindung validieren.
+    # Domain-Whitelist: nur konfigurierte JID-Domains zulassen -> der Chat-Server
+    # kontaktiert keine fremden XMPP-Server auf Zuruf.
+    domain = jid.split("@")[-1].lower() if "@" in jid else ""
+    if _ALLOWED_DOMAINS and domain not in _ALLOWED_DOMAINS:
+        _record_fail(ip)
+        return RedirectResponse(url="/login?error=1", status_code=status.HTTP_303_SEE_OTHER)
+
+    # Globale Drossel der XMPP-Validierungen (schuetzt den XMPP-Server / unsere IP).
+    if not _validation_allowed():
+        _record_fail(ip)
+        return RedirectResponse(url="/login?throttle=1", status_code=status.HTTP_303_SEE_OTHER)
+    _record_fail(ip)  # zaehlt als Versuch (begrenzt Wiederholungen je IP)
 
     # Sonst (neuer Account, oder zuvor fehlgeschlagen/deaktiviert): anlegen/aktualisieren;
     # der Daemon-Manager validiert ueber die echte XMPP-Verbindung (kein Connect aus dem Web).

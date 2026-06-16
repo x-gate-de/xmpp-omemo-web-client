@@ -30,6 +30,7 @@
     {% else %}
       <p class="login-sub">Mit deinen XMPP-Zugangsdaten anmelden.</p>
       {% if deleted %}<div class="login-ok">Account und gespeicherte Daten wurden geloescht.</div>{% endif %}
+      {% if throttle %}<div class="login-error">Zu viele Versuche. Bitte ein paar Minuten warten und erneut versuchen.</div>{% endif %}
       {% if error %}<div class="login-error">Anmeldung fehlgeschlagen — JID, Passwort oder Server pruefen.</div>{% endif %}
       <form method="post" action="/login" class="login-form">
         <label>XMPP-JID
