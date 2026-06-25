@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.9.0
+# Version: 2.9.1
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -801,7 +801,7 @@ def api_tokens_page(acc: dict = Depends(require_account), new_token: str = ""):
     )
 
 
-@app.post("/settings/api")
+@app.post("/settings/api", response_class=HTMLResponse)
 def api_tokens_create(label: str = Form(""), acc: dict = Depends(require_account)):
     token = _registry.create_api_token(acc["jid"], label)
     return _env.get_template("api_tokens.html").render(
