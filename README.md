@@ -113,6 +113,32 @@ already-validated account log in instantly. Use the online toggle in the app bar
 pause/resume an account; logging out only ends the browser session — archiving
 continues.
 
+## Read API
+
+Read-only access to your **own** archive via a **per-account Bearer token**. Tokens are
+created/revoked in Settings (gear → "API-Token"); only the SHA-256 hash is stored and the
+plaintext token is shown exactly once. The API is reachable like the web UI (any
+configured network/geo restriction stays in effect).
+
+    # list chats
+    curl -H "Authorization: Bearer <TOKEN>" https://chat.example.com/api/v1/chats
+
+    # one chat / several / all over a time window
+    curl -H "Authorization: Bearer <TOKEN>" \
+      "https://chat.example.com/api/v1/messages?partner=room@conference...&hours=24"
+    curl -H "Authorization: Bearer <TOKEN>" \
+      "https://chat.example.com/api/v1/messages?hours=24"            # all chats
+    curl -H "Authorization: Bearer <TOKEN>" \
+      "https://chat.example.com/api/v1/messages?partner=a@x,b@x&hours=48"  # selected
+
+    # incremental polling feed (returns next_since for the following call)
+    curl -H "Authorization: Bearer <TOKEN>" \
+      "https://chat.example.com/api/feed?since=<ts>&limit=200&include_outgoing=false&include_muc=true"
+
+`/api/feed` items carry a stable `external_id` (= message id) for reliable external
+dedup, plus `title`, `body` (attachments only as a hint), `sender`, `ts_source`, `url`.
+See SPEC.md, section F22.
+
 ## Configuration
 
 All settings live in `config.yaml` (see `config.yaml.example`). It holds global

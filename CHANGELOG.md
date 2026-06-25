@@ -1,6 +1,21 @@
 # Changelog
 
 ## [Unreleased]
+- Optional: MAM backfill to cover daemon downtime.
+
+## [1.5.0] - 2026-06-25
+- Read API (read-only, per-account Bearer token): query your own archive from
+  scripts and integrations. Tokens are created/revoked in Settings and stored only
+  as a SHA-256 hash (the plaintext is shown exactly once on creation).
+  - `GET /api/v1/chats`: list of chats (JID, name, room flag, count, last activity).
+  - `GET /api/v1/messages?partner=<JID[,JID...]>&hours=24`: messages of one, several
+    or all chats over a time window (alternatively `from`/`to` as unix seconds;
+    `limit` up to 20000, `truncated` flag when there are more hits).
+  - `GET /api/feed?since=<ts>&limit=200&include_outgoing=false&include_muc=true`:
+    incremental polling feed (ascending by time, returns `next_since`). Items carry
+    a stable `external_id` (= message id) for reliable external dedup, plus `title`,
+    `body` (attachments only as a hint), `sender`, `ts_source`, `url` (deep link).
+  - Reachable like the web UI; any configured network/geo restriction stays in effect.
 - Login hardening (public deployment): per-IP brute-force brake (default 5 failed
   attempts / 5 min) and a global throttle on triggered XMPP validations (default
   5/min) -> prevents login floods from getting the chat server fail2ban-blocked at
@@ -8,7 +23,6 @@
   (xmpp.allowed_domains): only your own domain(s) are allowed, foreign JIDs are
   rejected without contacting any XMPP server. Session cookie now Secure (HTTPS
   only). Thresholds configurable in config.yaml.
-- Optional: MAM backfill to cover daemon downtime.
 
 ## [1.4.0] - 2026-06-15
 - Attachments via drag & drop: drag one or more files into the chat window and drop

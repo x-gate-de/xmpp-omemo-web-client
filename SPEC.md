@@ -211,6 +211,30 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
   Home-Bildschirm hinzugefuegte App. Ohne konfigurierte VAPID-Schluessel ist Push
   vollstaendig deaktiviert (keine Glocke).
 
+### F22 — Read-API (nur lesend, token-authentifiziert)
+- Abruf des **eigenen** Archivs ueber HTTP fuer Skripte/Integrationen. Authentifizierung
+  per **Bearer-Token je Account** (`Authorization: Bearer <token>`); der Account ergibt
+  sich aus dem Token. Token werden in den **Settings** erzeugt und widerrufen und nur als
+  **SHA-256-Hash** gespeichert — der Klartext wird einmalig bei der Erzeugung angezeigt.
+- Endpunkte:
+  - `GET /api/v1/chats` — Liste der Chats (JID, Name, `is_room`, Anzahl, letzte Aktivitaet).
+  - `GET /api/v1/messages` — Nachrichten ueber ein Zeitfenster. Parameter: `partner`
+    (eine oder mehrere JIDs, kommagetrennt; leer = alle), `hours` (Default 24) bzw.
+    alternativ `from`/`to` als Unix-Sekunden, `limit` (bis 20000, Default 5000).
+    Bei mehr Treffern als `limit` ist `truncated` = true.
+  - `GET /api/feed` — inkrementeller Polling-Feed. Parameter: `since` (Unix-Zeit),
+    `limit` (Default 200, max 1000), `include_outgoing` (Default false),
+    `include_muc` (Default true). Aufsteigend nach Zeit sortiert; die Antwort liefert
+    `next_since` als Cursor fuers naechste Polling. Items tragen eine **stabile
+    `external_id`** (= Nachrichten-ID) fuer externe Dedup, dazu `title`, `body`,
+    `sender`, `ts_source`, `url` (Deep-Link).
+- **Keine Schluessel/Anhaenge nach aussen:** Anhaenge werden nicht ausgeliefert, nur als
+  Hinweis im `body` ("[Anhang: ...]"); nicht entschluesselte Nachrichten als
+  "[verschluesselt]". Kein OMEMO-Material, keine Read-State-/Historie-Pflicht.
+- **Mandantentrennung und Erreichbarkeit:** Ein Token greift ausschliesslich auf das
+  Archiv des eigenen Accounts zu. Die API ist wie die Web-UI erreichbar; eine ggf.
+  konfigurierte Netz-/Geo-Begrenzung bleibt aktiv (kein Sonderweg fuer die API).
+
 ## Nicht-funktionale Anforderungen
 
 - **Mandantentrennung:** Je Account ein eigenes Archiv; ein Nutzer hat ausschliesslich
