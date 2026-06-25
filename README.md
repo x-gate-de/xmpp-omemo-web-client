@@ -137,7 +137,7 @@ configured network/geo restriction stays in effect).
 
 `/api/feed` items carry a stable `external_id` (= message id) for reliable external
 dedup, plus `title`, `body` (attachments only as a hint), `sender`, `ts_source`, `url`.
-See SPEC.md, section F22.
+Full API documentation: API.md. See also SPEC.md, section F22.
 
 ## Configuration
 
