@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/accounts.py
 # Autor: Torben Belz
-# Version: 1.2.0
+# Version: 1.3.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Account-Registry fuer den Multi-User-Betrieb: speichert je XMPP-Account die
@@ -20,6 +20,7 @@ import hashlib
 import logging
 import os
 import re
+import secrets
 import sqlite3
 import time
 
@@ -72,6 +73,18 @@ class AccountRegistry:
                 "CREATE TABLE IF NOT EXISTS pending_deletions ("
                 "  jid TEXT PRIMARY KEY,"
                 "  requested_ts REAL NOT NULL"
+                ")"
+            )
+            # API-Token je Account (nur der SHA-256-Hash wird gespeichert, nie der
+            # Klartext-Token). Authentifiziert die Read-API (/api/v1/...).
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS api_tokens ("
+                "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                "  jid TEXT NOT NULL,"
+                "  token_hash TEXT UNIQUE NOT NULL,"
+                "  label TEXT,"
+                "  created_ts REAL NOT NULL,"
+                "  last_used_ts REAL"
                 ")"
             )
             conn.commit()
@@ -218,3 +231,46 @@ class AccountRegistry:
                 "auth_state": r["auth_state"],
             })
         return result
+
+    # --- API-Token ----------------------------------------------------------
+
+    @staticmethod
+    def _hash_token(token):
+        return hashlib.sha256(token.encode("utf8")).hexdigest()
+
+    # Erzeugt einen neuen API-Token (gibt den Klartext EINMALIG zurueck; gespeichert
+    # wird nur der Hash). label ist eine frei waehlbare Bezeichnung.
+    def create_api_token(self, jid, label=""):
+        token = secrets.token_urlsafe(32)
+        self._exec(
+            "INSERT INTO api_tokens (jid, token_hash, label, created_ts) VALUES (?, ?, ?, ?)",
+            (jid, self._hash_token(token), (label or "").strip()[:80], time.time()),
+        )
+        return token
+
+    def list_api_tokens(self, jid):
+        conn = self._open()
+        try:
+            rows = conn.execute(
+                "SELECT id, label, created_ts, last_used_ts FROM api_tokens WHERE jid = ? ORDER BY id DESC",
+                (jid,),
+            ).fetchall()
+        finally:
+            conn.close()
+        return [{"id": r["id"], "label": r["label"], "created_ts": r["created_ts"],
+                 "last_used_ts": r["last_used_ts"]} for r in rows]
+
+    def revoke_api_token(self, jid, token_id):
+        self._exec("DELETE FROM api_tokens WHERE id = ? AND jid = ?", (token_id, jid))
+
+    # Loest einen Klartext-Token zur JID auf (oder None). Aktualisiert last_used_ts.
+    def account_for_token(self, token):
+        if not token:
+            return None
+        row = self._query_one(
+            "SELECT id, jid FROM api_tokens WHERE token_hash = ?", (self._hash_token(token),)
+        )
+        if not row:
+            return None
+        self._exec("UPDATE api_tokens SET last_used_ts = ? WHERE id = ?", (time.time(), row["id"]))
+        return row["jid"]

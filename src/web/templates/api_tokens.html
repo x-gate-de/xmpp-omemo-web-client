@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}API-Token - Chat{% endblock %}
+{% block content %}
+<div class="api-page">
+  <h1>API-Token</h1>
+  <p class="api-intro">Mit einem persoenlichen Token kannst du dein Archiv per
+     <strong>Read-API</strong> abrufen (nur lesend, nur dein eigener Account).
+     Der Token wird gehasht gespeichert und nur <strong>einmal</strong> angezeigt.</p>
+
+  {% if new_token %}
+  <div class="token-new">
+    <div class="token-new-head">Neuer Token (jetzt kopieren — wird nicht erneut angezeigt):</div>
+    <code class="token-value">{{ new_token }}</code>
+  </div>
+  {% endif %}
+
+  <form class="token-create" method="post" action="/settings/api">
+    <input type="text" name="label" placeholder="Bezeichnung (z. B. Monitoring)" maxlength="80" aria-label="Bezeichnung">
+    <button class="btn" type="submit">Token erzeugen</button>
+  </form>
+
+  <div class="token-list">
+    {% for t in tokens %}
+    <div class="token-row">
+      <div class="token-meta">
+        <span class="token-label">{{ t.label or "(ohne Bezeichnung)" }}</span>
+        <span class="token-sub">erstellt {{ fmt_ts(t.created_ts) }} &middot; zuletzt genutzt {{ fmt_ts(t.last_used_ts) }}</span>
+      </div>
+      <form method="post" action="/settings/api/{{ t.id }}/revoke">
+        <button class="btn ghost" type="submit">Widerrufen</button>
+      </form>
+    </div>
+    {% else %}
+    <p class="token-empty">Noch keine Token angelegt.</p>
+    {% endfor %}
+  </div>
+
+  <h2>Verwendung</h2>
+  <p>Token im Header mitsenden: <code>Authorization: Bearer &lt;TOKEN&gt;</code></p>
+  <ul class="api-endpoints">
+    <li><code>GET /api/v1/chats</code> — Liste deiner Chats (JID, Name, Raum, Anzahl, letzte Aktivitaet).</li>
+    <li><code>GET /api/v1/messages?hours=24</code> — alle Chats, letzte 24 Stunden.</li>
+    <li><code>GET /api/v1/messages?partner=&lt;JID&gt;&amp;hours=24</code> — ein Chat (z. B. ein Raum).</li>
+    <li><code>GET /api/v1/messages?partner=&lt;JID1&gt;,&lt;JID2&gt;&amp;hours=48</code> — ausgewaehlte Chats, 48 Stunden.</li>
+    <li>Alternativ Zeitraum per Unix-Zeit: <code>?from=&lt;sek&gt;&amp;to=&lt;sek&gt;</code>. Max. <code>limit</code> 20000 (Default 5000); bei mehr Treffern <code>truncated: true</code>.</li>
+  </ul>
+  <h2>Inkrementeller Feed (Polling)</h2>
+  <p><code>GET /api/feed?since=&lt;ts&gt;&amp;limit=200&amp;include_outgoing=false&amp;include_muc=true</code></p>
+  <ul class="api-endpoints">
+    <li>Aufsteigend nach Zeit; Antwort enthaelt <code>next_since</code> als Cursor fuers naechste Polling (mit <code>since=next_since</code> weiterfragen).</li>
+    <li>Item-Felder: <code>external_id</code> (stabile Nachrichten-ID, fuer Dedup), <code>title</code>, <code>body</code>, <code>sender</code>, <code>ts_source</code>, <code>url</code> (Deep-Link).</li>
+    <li><code>include_outgoing=false</code> liefert nur eingehende Nachrichten; <code>include_muc=false</code> blendet Raeume aus. Anhaenge erscheinen nur als Hinweis im <code>body</code>.</li>
+  </ul>
+  <p class="api-note">Beispiel:
+     <code>curl -H "Authorization: Bearer &lt;TOKEN&gt;" "https://chat.example.com/api/v1/messages?hours=24"</code></p>
+  <p class="api-note">Hinweis: Die API ist genauso erreichbar wie die Web-UI; eine ggf.
+     konfigurierte Netz-/Geo-Begrenzung der Web-UI gilt unveraendert auch fuer die API.</p>
+</div>
+{% endblock %}

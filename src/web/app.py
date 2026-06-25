@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben Belz
-# Version: 2.8.0
+# Version: 2.9.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -26,7 +26,7 @@ from urllib.parse import urlparse
 
 import jinja2
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile, status
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, Request, UploadFile, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -67,7 +67,7 @@ def _asset_version():
 _env.globals["asset_ver"] = _asset_version()
 
 # Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog).
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
 HELP_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/ANLEITUNG.md"
 _env.globals["app_version"] = APP_VERSION
@@ -177,6 +177,9 @@ def _ensure_db(db_path):
 
 def _fmt_ts(ts):
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+
+
+_env.globals["fmt_ts"] = lambda ts: _fmt_ts(ts) if ts else "-"
 
 
 def _initials(name, jid):
@@ -646,6 +649,171 @@ def push_pref_set(partner: str, value: str = Form(...), acc: dict = Depends(requ
     finally:
         conn.close()
     return {"ok": True}
+
+
+# --- Read-API (v1) ----------------------------------------------------------
+# Token-authentifizierter Lesezugriff aufs eigene Archiv (fuer Skripte/Integration).
+
+def _iso(ts):
+    return datetime.fromtimestamp(ts).isoformat() if ts else None
+
+
+# Authentifiziert per Bearer-Token (oder X-API-Key). Liefert den Account oder 401.
+def require_api_account(request: Request):
+    auth = request.headers.get("authorization", "")
+    token = auth[7:].strip() if auth[:7].lower() == "bearer " else ""
+    if not token:
+        token = request.headers.get("x-api-key", "").strip()
+    jid = _registry.account_for_token(token) if token else None
+    if not jid:
+        raise HTTPException(status_code=401, detail="Ungueltiger oder fehlender API-Token")
+    return {"jid": jid, "archive_path": _registry.archive_path(jid)}
+
+
+# Nachrichten im Zeitfenster, optional auf bestimmte Partner gefiltert.
+# Rueckgabe: (messages, truncated). truncated=True, wenn mehr als limit vorhanden.
+def _api_messages(db_path, partners, since, until, limit):
+    conn = _open_ro(db_path)
+    try:
+        sql = ("SELECT id, partner_jid, direction, body, decrypted, ts_received, sender "
+               "FROM messages WHERE ts_received >= ? AND ts_received <= ? AND " + _nonempty() + " ")
+        params = [since, until]
+        if partners:
+            sql += "AND partner_jid IN (" + ",".join("?" * len(partners)) + ") "
+            params.extend(partners)
+        sql += "ORDER BY ts_received ASC, id ASC LIMIT ?"
+        params.append(limit + 1)
+        rows = conn.execute(sql, params).fetchall()
+        name_map = {}
+        for p in {r["partner_jid"] for r in rows}:
+            nrow = conn.execute("SELECT name FROM contacts WHERE jid = ?", (p,)).fetchone()
+            nm = nrow["name"] if nrow and nrow["name"] else None
+            if not nm:
+                rrow = conn.execute("SELECT name FROM muc_available WHERE room_jid = ?", (p,)).fetchone()
+                nm = rrow["name"] if rrow and rrow["name"] else None
+            name_map[p] = nm or p.split("@")[0]
+    finally:
+        conn.close()
+    truncated = len(rows) > limit
+    out = []
+    for r in rows[:limit]:
+        media = _media_info(r["body"], r["id"]) if r["decrypted"] else None
+        out.append({
+            "partner": r["partner_jid"], "name": name_map.get(r["partner_jid"]),
+            "direction": r["direction"], "sender": r["sender"],
+            "ts": r["ts_received"], "ts_iso": _iso(r["ts_received"]),
+            "decrypted": bool(r["decrypted"]),
+            # Anhang-Body (aesgcm-URL mit Schluessel) nicht ausliefern -> nur Label.
+            "text": None if (media or not r["decrypted"]) else r["body"],
+            "media": ({"kind": media["kind"], "name": media["name"]} if media else None),
+        })
+    return out, truncated
+
+
+@app.get("/api/v1/chats")
+def api_v1_chats(acc: dict = Depends(require_api_account)):
+    items = _conv_items(acc["archive_path"])
+    return {"account": acc["jid"], "chats": [
+        {"partner": it["partner"], "name": it["name"], "is_room": it["is_room"],
+         "count": it["count"], "last_ts": it["last_ts"], "last_iso": _iso(it["last_ts"])}
+        for it in items
+    ]}
+
+
+@app.get("/api/v1/messages")
+def api_v1_messages(acc: dict = Depends(require_api_account),
+                    partner: str = "", hours: float = 24.0, limit: int = 5000,
+                    from_: float = Query(0.0, alias="from"), to: float = Query(0.0)):
+    now = time.time()
+    until = to if to > 0 else now
+    since = from_ if from_ > 0 else now - max(0.0, hours) * 3600.0
+    limit = max(1, min(int(limit), 20000))
+    partners = [p.strip() for p in partner.split(",") if p.strip()]
+    msgs, truncated = _api_messages(acc["archive_path"], partners, since, until, limit)
+    return {"account": acc["jid"], "partners": partners or "all",
+            "since": since, "since_iso": _iso(since), "until": until, "until_iso": _iso(until),
+            "count": len(msgs), "truncated": truncated, "messages": msgs}
+
+
+# Body-Text fuer den Feed. Anhaenge werden bewusst nicht ausgeliefert (kein
+# Schluesselmaterial), nur ein Hinweis. Nicht entschluesselte Nachrichten ebenso.
+def _feed_body(body, msg_id, decrypted):
+    if not decrypted:
+        return "[verschluesselt]"
+    media = _media_info(body, msg_id)
+    if media:
+        return "[Anhang: %s]" % (media.get("name") or media.get("kind") or "Datei")
+    return body
+
+
+# Inkrementeller Polling-Feed fuer Integrationen (z. B. NextUp).
+# Aufsteigend nach ts; next_since liefert den Cursor fuers naechste Polling.
+# Dedup erfolgt extern ueber external_id (= stabile messages.id).
+@app.get("/api/feed")
+def api_feed(acc: dict = Depends(require_api_account),
+             since: float = 0.0, limit: int = 200,
+             include_outgoing: bool = False, include_muc: bool = True):
+    limit = max(1, min(int(limit), 1000))
+    conn = _open_ro(acc["archive_path"])
+    try:
+        sql = (
+            "SELECT m.id, m.partner_jid, m.direction, m.body, m.decrypted, m.ts_received, m.sender, "
+            "  (SELECT name FROM contacts c WHERE c.jid = m.partner_jid) AS contact_name, "
+            "  (SELECT name FROM muc_available a WHERE a.room_jid = m.partner_jid) AS room_name, "
+            "  (EXISTS(SELECT 1 FROM mucs g WHERE g.room_jid = m.partner_jid) "
+            "   OR EXISTS(SELECT 1 FROM muc_available a2 WHERE a2.room_jid = m.partner_jid)) AS is_room "
+            "FROM messages m WHERE m.ts_received >= ? AND " + _nonempty("m.") + " "
+        )
+        params = [since]
+        # include_outgoing=false: nur eingehende Nachrichten (Standard fuer Benachrichtigungen).
+        if not include_outgoing:
+            sql += "AND m.direction = 'in' "
+        # include_muc=false: Raeume ausblenden (nur 1:1-Chats).
+        if not include_muc:
+            sql += ("AND NOT EXISTS(SELECT 1 FROM mucs g WHERE g.room_jid = m.partner_jid) "
+                    "AND NOT EXISTS(SELECT 1 FROM muc_available a3 WHERE a3.room_jid = m.partner_jid) ")
+        sql += "ORDER BY m.ts_received ASC, m.id ASC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(sql, params).fetchall()
+    finally:
+        conn.close()
+    items = []
+    next_since = since
+    for r in rows:
+        title = (r["room_name"] if r["is_room"] else r["contact_name"]) or r["partner_jid"].split("@")[0]
+        items.append({
+            "external_id": r["id"], "title": title,
+            "body": _feed_body(r["body"], r["id"], r["decrypted"]),
+            "sender": r["sender"], "ts_source": r["ts_received"], "ts_iso": _iso(r["ts_received"]),
+            "is_room": bool(r["is_room"]), "url": "/c/" + r["partner_jid"],
+        })
+        next_since = r["ts_received"]
+    return {"account": acc["jid"], "count": len(items), "next_since": next_since, "items": items}
+
+
+# --- API-Token verwalten (Settings-UI) --------------------------------------
+
+@app.get("/settings/api", response_class=HTMLResponse)
+def api_tokens_page(acc: dict = Depends(require_account), new_token: str = ""):
+    return _env.get_template("api_tokens.html").render(
+        nav_active="", account_jid=acc["jid"], account_state=_account_state(acc["jid"]),
+        tokens=_registry.list_api_tokens(acc["jid"]), new_token="",
+    )
+
+
+@app.post("/settings/api")
+def api_tokens_create(label: str = Form(""), acc: dict = Depends(require_account)):
+    token = _registry.create_api_token(acc["jid"], label)
+    return _env.get_template("api_tokens.html").render(
+        nav_active="", account_jid=acc["jid"], account_state=_account_state(acc["jid"]),
+        tokens=_registry.list_api_tokens(acc["jid"]), new_token=token,
+    )
+
+
+@app.post("/settings/api/{token_id:int}/revoke")
+def api_tokens_revoke(token_id: int, acc: dict = Depends(require_account)):
+    _registry.revoke_api_token(acc["jid"], token_id)
+    return RedirectResponse(url="/settings/api", status_code=status.HTTP_303_SEE_OTHER)
 
 
 # Schaltet "immer online" fuer den eigenen Account um (enabled-Flag).

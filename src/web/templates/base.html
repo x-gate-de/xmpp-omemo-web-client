@@ -112,6 +112,7 @@
         </div>
         {% endif %}
         <div class="design-foot">
+          {% if account_jid %}<a class="help-link" href="/settings/api">API-Token</a>{% endif %}
           <a class="help-link" href="{{ help_url }}" target="_blank" rel="noopener">Hilfe &amp; Anleitung</a>
           <a class="ver-link" href="{{ changelog_url }}" target="_blank" rel="noopener">X-Chat {{ app_version }}</a>
         </div>
