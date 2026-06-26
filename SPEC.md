@@ -244,7 +244,12 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
 - **Idempotenz:** Mehrfachzustellung (Carbons/Direktnachricht) und MAM-Nachladen duerfen
   keine Duplikate erzeugen.
 - **Verfuegbarkeit:** Daemon/Manager und Web laufen als systemd-Services mit automatischem
-  Reconnect/Restart.
+  Reconnect/Restart. Der Manager fuehrt einen Verbindungs-Watchdog (prueft je Poll die
+  Verbindung, baut tote Verbindungen nach `xmpp.reconnect_after_seconds` neu auf) und ein
+  aktives Keepalive (XEP-0199) -> kein stundenlanges stilles Offline. Solange keine Sitzung
+  steht, wird **nicht** gesendet: ausgehende Nachrichten bleiben in der Outbox und gehen
+  nach dem Reconnect raus (kein stiller Verlust). Die Online-Anzeige spiegelt den echten
+  Verbindungszustand.
 - **Logging:** Wesentliche Schritte werden geloggt — ohne Klartext-Inhalte, Passwoerter
   oder Schluesselmaterial. Audit-relevant: Verbindungsstatus, Geraete-Trust-Entscheidungen,
   Entschluesselungsfehler.

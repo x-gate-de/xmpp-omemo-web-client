@@ -18,6 +18,11 @@ xmpp:
   # Ressourcenname, unter dem ein Account-Daemon erscheint.
   resource: "archiver"
   tls_verify: true
+  # Backstop-Watchdog: Sekunden, die eine als getrennt erkannte Verbindung
+  # bestehen darf, bevor der Manager sie hart neu aufbaut (falls slixmpps eigener
+  # Reconnect nicht greift). Zusaetzlich laeuft ein XEP-0199-Keepalive (60s/30s),
+  # der tote/halboffene Verbindungen schnell erkennt. Default 60.
+  reconnect_after_seconds: 60
   # Nur Logins fuer diese JID-Domains zulassen (Liste). Leer = alle erlaubt.
   # Empfohlen bei oeffentlichem Betrieb: verhindert, dass der Chat-Server auf
   # Zuruf beliebige XMPP-Server kontaktiert, und buendelt Brute-Force auf die
