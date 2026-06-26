@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben Belz
-# Version: 1.4.2
+# Version: 1.5.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -111,6 +111,11 @@ class ArchiverBot(ClientXMPP):
         self._muc_nick = xmpp_cfg.get("muc_nick") or self.boundjid.local
         self._joined_rooms = set()
         self._loops_started = False
+        # True erst nach session_start (Sitzung steht). Verhindert Senden in eine
+        # tote/halboffene Verbindung -> ausgehende Nachrichten bleiben in der Outbox.
+        self._session_ready = False
+        # slixmpp darf selbst neu verbinden; der Manager ist der Backstop-Watchdog.
+        self.auto_reconnect = True
 
         # Web Push (optional): nur aktiv, wenn pywebpush vorhanden und VAPID konfiguriert.
         push = config.get("push") or {}
@@ -152,6 +157,7 @@ class ArchiverBot(ClientXMPP):
         self.add_event_handler("groupchat_message", self._on_groupchat)
         self.add_event_handler("receipt_received", self._on_receipt)
         self.add_event_handler("roster_update", lambda _e: self._persist_roster())
+        self.add_event_handler("disconnected", self._on_disconnected)
 
     async def _on_session_start(self, _event):
         self.send_presence()
@@ -167,6 +173,14 @@ class ArchiverBot(ClientXMPP):
             logger.info("OMEMO-Geraet veroeffentlicht/aktiv")
         except Exception as e:
             logger.error("OMEMO-Initialisierung fehlgeschlagen: %s", type(e).__name__)
+        # Aktiver Keepalive (XEP-0199): erkennt tote/halboffene Verbindungen in ~1-2 Min
+        # und loest einen Reconnect aus (statt erst nach einem langen TCP-Timeout).
+        try:
+            self["xep_0199"].enable_keepalive(interval=60, timeout=30)
+        except Exception as e:
+            logger.warning("Keepalive konnte nicht aktiviert werden: %s", type(e).__name__)
+        # Sitzung steht -> Senden ist jetzt erlaubt, Outbox wird abgearbeitet.
+        self._session_ready = True
         logger.info("Daemon online als %s", self.boundjid.full)
 
         # Hintergrundaufgaben nur einmal starten (session_start feuert bei Reconnect).
@@ -174,6 +188,11 @@ class ArchiverBot(ClientXMPP):
             self._loops_started = True
             asyncio.create_task(self._discover_rooms())
             asyncio.create_task(self._outbox_loop())
+
+    # Verbindung verloren -> kein Senden mehr, bis die Sitzung wieder steht.
+    def _on_disconnected(self, _event):
+        self._session_ready = False
+        logger.info("Verbindung getrennt -- warte auf Reconnect")
 
     # Roster in die contacts-Tabelle schreiben (Quelle der Userliste in der UI).
     def _persist_roster(self):
@@ -309,21 +328,26 @@ class ArchiverBot(ClientXMPP):
     async def _outbox_loop(self):
         while True:
             try:
-                await self._join_pending_rooms()
-                for (outbox_id, recipient, body, kind,
-                     media_path, media_name, media_mime) in self._archive.claim_pending_outbox():
-                    if kind == "media":
-                        await self._send_media(outbox_id, recipient, media_path, media_name, media_mime)
-                    elif kind == "groupchat":
-                        await self._send_groupchat(outbox_id, recipient, body)
-                    else:
-                        await self._send_chat(outbox_id, recipient, body)
-                # Anfragen, aeltere Nachrichten per MAM nachzuladen, abarbeiten.
-                for req_id, target, kind in self._archive.claim_pending_mam():
-                    await self._backfill(req_id, target, kind)
-                # OMEMO-Geraete-/Verifizierungs-Anfragen abarbeiten.
-                for req_id, action, jid, ihex, tval in self._archive.claim_pending_omemo():
-                    await self._omemo_request(req_id, action, jid, ihex, tval)
+                # Nur arbeiten, wenn die Sitzung wirklich steht. Sonst wuerden Sends
+                # in eine tote Verbindung laufen und als "gesendet" verbucht, obwohl
+                # nichts ankommt. So bleiben sie in der Outbox und gehen nach dem
+                # Reconnect automatisch raus (kein stiller Verlust).
+                if self._session_ready and self.is_connected():
+                    await self._join_pending_rooms()
+                    for (outbox_id, recipient, body, kind,
+                         media_path, media_name, media_mime) in self._archive.claim_pending_outbox():
+                        if kind == "media":
+                            await self._send_media(outbox_id, recipient, media_path, media_name, media_mime)
+                        elif kind == "groupchat":
+                            await self._send_groupchat(outbox_id, recipient, body)
+                        else:
+                            await self._send_chat(outbox_id, recipient, body)
+                    # Anfragen, aeltere Nachrichten per MAM nachzuladen, abarbeiten.
+                    for req_id, target, kind in self._archive.claim_pending_mam():
+                        await self._backfill(req_id, target, kind)
+                    # OMEMO-Geraete-/Verifizierungs-Anfragen abarbeiten.
+                    for req_id, action, jid, ihex, tval in self._archive.claim_pending_omemo():
+                        await self._omemo_request(req_id, action, jid, ihex, tval)
             except Exception as e:
                 logger.error("Outbox-Verarbeitung fehlgeschlagen: %s", type(e).__name__)
             await asyncio.sleep(2)

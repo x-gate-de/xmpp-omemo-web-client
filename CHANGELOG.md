@@ -3,6 +3,20 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.6.0] - 2026-06-26
+- Connection robustness (bugfix: hours-long silent offline + message loss). After a
+  dropped connection the daemon could stay offline for hours without reconnecting;
+  messages sent via the web UI were marked "sent" but never reached the server.
+  - Reconnect watchdog in the manager: checks `is_connected()` each poll and rebuilds
+    dead connections after `xmpp.reconnect_after_seconds` (default 60).
+  - Active keepalive (XEP-0199, 60s/30s): detects dead/half-open connections within
+    1-2 minutes instead of waiting for a long TCP timeout.
+  - Offline send guard: messages are only sent when a session is actually up;
+    otherwise they stay in the outbox ("sending …") and go out after reconnect --
+    no more silent loss.
+  - Online indicator now reflects the real connection: "connecting …" instead of a
+    false "online" on drop (auth state reset on `disconnected`).
+
 ## [1.5.0] - 2026-06-25
 - Read API (read-only, per-account Bearer token): query your own archive from
   scripts and integrations. Tokens are created/revoked in Settings and stored only
