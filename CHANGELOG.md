@@ -3,6 +3,17 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.6.1] - 2026-07-01
+- Fix reconnect storm (regression from the 1.6.0 watchdog). After a longer
+  disconnect the watchdog built a SECOND bot for the same account; both bound the
+  same resource `/archiver` and kicked each other off the server -> continuous flap
+  (connect/disconnect every few seconds), nothing archived. Root cause: in slixmpp
+  1.16 the connection does not reconnect itself after a drop, so the keepalive
+  reconnect and the watchdog rebuild ran in parallel. Fix: the watchdog no longer
+  builds a new bot but reconnects the EXISTING one (`bot.connect()`, slixmpp
+  backoff), so there is always exactly one connection per account -> no resource
+  conflict, no storm.
+
 ## [1.6.0] - 2026-06-26
 - Connection robustness (bugfix: hours-long silent offline + message loss). After a
   dropped connection the daemon could stay offline for hours without reconnecting;
