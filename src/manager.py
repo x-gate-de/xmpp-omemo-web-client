@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/manager.py
 # Autor: Torben Belz
-# Version: 1.3.0
+# Version: 1.4.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Account-Manager fuer den Multi-User-Betrieb: haelt je aktivem Account eine
@@ -31,8 +31,8 @@ class AccountManager:
         self._default_host = config["xmpp"].get("default_host") or ""
         self._default_port = int(config["xmpp"].get("default_port") or 5222)
         self._bots = {}
-        # Watchdog: ab wann eine als getrennt erkannte Verbindung hart neu aufgebaut
-        # wird (Backstop, falls slixmpps eigener Reconnect nicht greift).
+        # Watchdog-Kadenz: Abstand, in dem bei anhaltend getrennter Verbindung ein
+        # Reconnect des BESTEHENDEN Bots erneut angestossen wird (kein Neuaufbau).
         self._reconnect_after = float(config["xmpp"].get("reconnect_after_seconds", 60))
         self._down_since = {}  # jid -> monotone Zeit, seit der der Bot getrennt ist
 
@@ -106,9 +106,18 @@ class AccountManager:
                 pass
             logger.info("Account getrennt: %s", jid)
 
-    # Watchdog: erkennt tote Verbindungen und baut sie nach _reconnect_after neu auf.
-    # Backstop fuer den Fall, dass slixmpps eigener Reconnect nicht greift (genau der
-    # Ausfall, der zu stundenlanger stiller Offline-Zeit gefuehrt hat).
+    # Watchdog: erkennt tote Verbindungen und stoesst einen Reconnect des BESTEHENDEN
+    # Bots an. slixmpp reconnektet nach einem Abbruch (in 1.16) nicht von selbst, daher
+    # muss der Manager anstossen -- ABER es wird bewusst KEIN neuer Bot gebaut. Zwei Bots
+    # je Account wuerden sich mit derselben Resource /archiver gegenseitig vom Server
+    # werfen (Flap-Storm). Ein bot.connect() auf dem vorhandenen Bot retryt intern mit
+    # Backoff und haelt die Verbindung eindeutig.
+    def _reconnect_same_bot(self, jid, bot):
+        try:
+            bot.connect()
+        except Exception as e:
+            logger.warning("Reconnect-Anstoss %s fehlgeschlagen: %s", jid, type(e).__name__)
+
     def _check_health(self, jid, acc):
         bot = self._bots.get(jid)
         if bot is None:
@@ -117,11 +126,18 @@ class AccountManager:
             self._down_since.pop(jid, None)
             return
         now = time.monotonic()
-        first = self._down_since.setdefault(jid, now)
-        if now - first >= self._reconnect_after:
-            logger.warning("Verbindung tot seit %.0fs -- baue %s neu auf", now - first, jid)
-            self._disconnect(jid)
-            self._connect(acc)
+        first = self._down_since.get(jid)
+        if first is None:
+            # Erstmals getrennt erkannt -> sofort einen Reconnect anstossen.
+            self._down_since[jid] = now
+            logger.info("Verbindung weg -- Reconnect (bestehender Bot): %s", jid)
+            self._reconnect_same_bot(jid, bot)
+        elif now - first >= self._reconnect_after:
+            # Weiterhin getrennt -> periodisch erneut anstossen (kein neuer Bot).
+            self._down_since[jid] = now
+            logger.warning("Weiter getrennt seit >%.0fs -- Reconnect erneut anstossen: %s",
+                           self._reconnect_after, jid)
+            self._reconnect_same_bot(jid, bot)
 
     # Endlosschleife: aktive Accounts mit den laufenden Bots abgleichen.
     async def run(self):
