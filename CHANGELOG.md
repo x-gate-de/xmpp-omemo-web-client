@@ -3,6 +3,17 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.7.0] - 2026-07-10
+- Visual redesign (aligned with the sister project):
+  - Fresher "inbox blue" palette (lighter, cooler background) and a GitHub-neutral
+    dark theme (instead of a bluish one).
+  - Six accent colors (blue/teal/green/purple/orange/red) with lighter dark-mode
+    variants for contrast; blue by default.
+  - System font (system-ui), a solid (no longer translucent) app bar, a bolder
+    wordmark, and a tidied settings menu with row separators.
+  - Interaction polish: smooth transitions, press feedback (tap scale-down), clear
+    focus rings. No change to features or behaviour.
+
 ## [1.6.1] - 2026-07-01
 - Fix reconnect storm (regression from the 1.6.0 watchdog). After a longer
   disconnect the watchdog built a SECOND bot for the same account; both bound the

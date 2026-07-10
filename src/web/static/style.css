@@ -5,61 +5,84 @@
    Zweck: Design-System der Chat Web-UI (Messenger-Stil, hell/dunkel).
    --------------------------------------------------------------------------- */
 
+/* Palette nach dem Vorbild von NextUp ("Inbox blue + priority red"):
+   heller, kuehler Grund; --primary = waehlbarer Akzent, --accent = OK-Gruen
+   (online/ungelesen/aktiv), --danger = Prioritaets-Rot. */
 :root {
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
   --on-primary: #ffffff;
-  --accent: #059669;
-  --bg: #f4f6fb;
+  --accent: #1e7e45;
+  --bg: #f6f8fc;
   --surface: #ffffff;
-  --surface-2: #eef2fb;
+  --surface-2: #eef2fc;
   --bubble-in: #ffffff;
   --bubble-out: var(--primary);
   --fg: #0f172a;
+  --ink-soft: #334155;
   --muted: #64748b;
-  --border: #e3e9f5;
+  --border: #e4ecfc;
   --danger: #dc2626;
-  --shadow: 0 1px 2px rgba(15, 23, 42, .06), 0 2px 8px rgba(15, 23, 42, .04);
+  --shadow: 0 1px 2px rgba(15, 23, 42, .05), 0 10px 28px rgba(15, 23, 42, .06);
   --radius: 14px;
   --radius-sm: 10px;
   --appbar-h: 60px;
 }
 
-/* Dunkle Tokens. --primary bleibt der Akzentfarbe ueberlassen (kein Konflikt). */
+/* Dunkel: GitHub-neutrale Grautoene (wie NextUp) statt blaustichig. */
 :root[data-theme="dark"] {
-  --accent: #34d399;
-  --bg: #0b1120;
-  --surface: #111a2e;
-  --surface-2: #1b2740;
-  --bubble-in: #1b2740;
-  --fg: #e8eef9;
-  --muted: #94a3b8;
-  --border: #233149;
-  --danger: #f87171;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 10px rgba(0, 0, 0, .3);
+  --accent: #3fb950;
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface-2: #21262d;
+  --bubble-in: #21262d;
+  --fg: #e6edf3;
+  --ink-soft: #c9d1d9;
+  --muted: #8b949e;
+  --border: #30363d;
+  --danger: #f85149;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .4);
 }
 /* Auto: dem Betriebssystem folgen, ausser bei explizit hell gewaehltem Modus. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --accent: #34d399;
-    --bg: #0b1120;
-    --surface: #111a2e;
-    --surface-2: #1b2740;
-    --bubble-in: #1b2740;
-    --fg: #e8eef9;
-    --muted: #94a3b8;
-    --border: #233149;
-    --danger: #f87171;
-    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 2px 10px rgba(0, 0, 0, .3);
+    --accent: #3fb950;
+    --bg: #0d1117;
+    --surface: #161b22;
+    --surface-2: #21262d;
+    --bubble-in: #21262d;
+    --fg: #e6edf3;
+    --ink-soft: #c9d1d9;
+    --muted: #8b949e;
+    --border: #30363d;
+    --danger: #f85149;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .4);
   }
 }
 
-/* --- Akzentfarbe (setzt --primary in jedem Modus) ------------------------- */
-:root[data-accent="green"]  { --primary: #059669; --primary-hover: #047857; }
-:root[data-accent="red"]    { --primary: #dc2626; --primary-hover: #b91c1c; }
-:root[data-accent="purple"] { --primary: #7c3aed; --primary-hover: #6d28d9; }
-:root[data-accent="orange"] { --primary: #ea580c; --primary-hover: #c2410c; }
+/* --- Akzentfarbe (setzt --primary in jedem Modus, 6 Presets wie NextUp) --- */
+:root[data-accent="blue"]   { --primary: #2563eb; --primary-hover: #1d4ed8; }
 :root[data-accent="teal"]   { --primary: #0d9488; --primary-hover: #0f766e; }
+:root[data-accent="green"]  { --primary: #1e7e45; --primary-hover: #166534; }
+:root[data-accent="purple"] { --primary: #7c4dff; --primary-hover: #6d28d9; }
+:root[data-accent="orange"] { --primary: #ea580c; --primary-hover: #c2410c; }
+:root[data-accent="red"]    { --primary: #c0392b; --primary-hover: #a93226; }
+
+/* Dunkelmodus: hellere Akzent-Varianten fuer ausreichenden Kontrast. */
+:root[data-theme="dark"][data-accent="blue"]   { --primary: #5b9be3; --primary-hover: #4d8fd6; }
+:root[data-theme="dark"][data-accent="teal"]   { --primary: #2dd4bf; --primary-hover: #14b8a6; }
+:root[data-theme="dark"][data-accent="green"]  { --primary: #4ade80; --primary-hover: #22c55e; }
+:root[data-theme="dark"][data-accent="purple"] { --primary: #a78bfa; --primary-hover: #8b5cf6; }
+:root[data-theme="dark"][data-accent="orange"] { --primary: #fb923c; --primary-hover: #f97316; }
+:root[data-theme="dark"][data-accent="red"]    { --primary: #f87171; --primary-hover: #ef4444; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"])[data-accent="blue"]   { --primary: #5b9be3; --primary-hover: #4d8fd6; }
+  :root:not([data-theme="light"])[data-accent="teal"]   { --primary: #2dd4bf; --primary-hover: #14b8a6; }
+  :root:not([data-theme="light"])[data-accent="green"]  { --primary: #4ade80; --primary-hover: #22c55e; }
+  :root:not([data-theme="light"])[data-accent="purple"] { --primary: #a78bfa; --primary-hover: #8b5cf6; }
+  :root:not([data-theme="light"])[data-accent="orange"] { --primary: #fb923c; --primary-hover: #f97316; }
+  :root:not([data-theme="light"])[data-accent="red"]    { --primary: #f87171; --primary-hover: #ef4444; }
+}
 
 * { box-sizing: border-box; }
 
@@ -72,7 +95,7 @@ body {
   min-height: 100%;
   background: var(--bg);
   color: var(--fg);
-  font-family: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -86,8 +109,7 @@ a { color: inherit; }
   top: 0;
   z-index: 40;
   height: var(--appbar-h);
-  background: color-mix(in srgb, var(--surface) 88%, transparent);
-  backdrop-filter: saturate(180%) blur(12px);
+  background: var(--surface);
   border-bottom: 1px solid var(--border);
 }
 .appbar-inner {
@@ -103,8 +125,9 @@ a { color: inherit; }
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
+  font-weight: 800;
+  font-size: 1.16rem;
+  letter-spacing: -0.02em;
   text-decoration: none;
   color: var(--fg);
 }
@@ -425,11 +448,18 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .empty svg { width: 44px; height: 44px; color: var(--border); margin-bottom: 12px; }
 .empty p { margin: 0; }
 
-/* --- Fokus & Motion ------------------------------------------------------ */
-:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* --- Fokus & Motion (Interaktions-Politur nach NextUp-Vorbild) ----------- */
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+
+/* Weiche Uebergaenge + unmittelbares Press-Feedback (scale 0.97). */
+.btn, .design-mode, .chip, .conv-chip, .tab, .online-btn, .logout-btn, .iconbtn, .swatch {
+  transition: background-color .18s ease, color .18s ease, border-color .18s ease, transform .12s ease;
+}
+.btn:active, .design-mode:active, .swatch:active, .conv-chip:active, .tab:active,
+.online-btn:active, .logout-btn:active, .iconbtn:active { transform: scale(.97); }
 
 @media (prefers-reduced-motion: reduce) {
-  * { transition: none !important; animation: none !important; }
+  *, *::before, *::after { transition: none !important; animation: none !important; scroll-behavior: auto !important; }
 }
 
 /* --- Such-Icon in der App-Bar ------------------------------------------- */
@@ -465,9 +495,9 @@ a.list-row:hover { transform: translateY(-1px); border-color: color-mix(in srgb,
 .design-panel {
   position: absolute; right: 0; top: calc(100% + 8px); z-index: 50;
   background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-  box-shadow: var(--shadow); padding: 13px 15px; min-width: 212px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .22); padding: 14px 16px; width: 250px;
 }
-.design-row + .design-row { margin-top: 13px; }
+.design-row + .design-row { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 .design-foot { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--border); text-align: center; display: flex; flex-direction: column; gap: 5px; }
 .help-link { font-size: 0.8rem; font-weight: 600; color: var(--primary); text-decoration: none; }
 .help-link:hover { text-decoration: underline; }
