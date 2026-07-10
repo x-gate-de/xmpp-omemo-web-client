@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben
-# Version: 2.9.4
+# Version: 2.10.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -68,7 +68,7 @@ def _asset_version():
 _env.globals["asset_ver"] = _asset_version()
 
 # Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog).
-APP_VERSION = "1.7.0"
+APP_VERSION = "1.8.0"
 CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
 HELP_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/ANLEITUNG.md"
 _env.globals["app_version"] = APP_VERSION

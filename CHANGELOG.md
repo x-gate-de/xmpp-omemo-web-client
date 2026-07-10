@@ -3,6 +3,17 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.8.0] - 2026-07-10
+- Bugfix image view in standalone PWA: tapping an image navigated the app to the
+  image URL; without browser chrome there was no "back" -> the app got stuck
+  (deadlock, restart required). Images now open in an in-app lightbox (overlay),
+  dismissible by tap, X, Escape or the back gesture. No navigation anymore.
+- New "signal-field" view (gear -> view): bento tiles, most recent chat large,
+  older ones smaller; an activity gauge (ring) per chat showing messages/day;
+  unread chats with a heat tint; push chats ("important") with a gradient frame.
+  List/grid views unchanged.
+- Gradient avatars (all views) and a solid accent edge for push chats.
+
 ## [1.7.0] - 2026-07-10
 - Visual redesign (aligned with the sister project):
   - Fresher "inbox blue" palette (lighter, cooler background) and a GitHub-neutral

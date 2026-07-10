@@ -44,6 +44,51 @@
     return a;
   }
 
+  // --- Bild-Lightbox ------------------------------------------------------
+  // Bilder als In-App-Overlay zeigen statt zur /media-URL zu navigieren. Im
+  // Standalone-PWA (Home-Screen-App) gibt es sonst kein "Zurueck" und die App
+  // bleibt auf der Bild-Seite haengen (Deadlock). Schliessbar per Tippen aufs
+  // Overlay, X-Knopf, Escape oder Zurueck-Geste (History-Eintrag).
+  var _lb = null;
+  function _lightbox() {
+    if (_lb) return _lb;
+    _lb = el("div", "lightbox");
+    var img = document.createElement("img"); img.alt = "";
+    var close = document.createElement("button");
+    close.type = "button"; close.className = "lightbox-close";
+    close.setAttribute("aria-label", "Schliessen"); close.innerHTML = "&times;";
+    _lb.appendChild(close); _lb.appendChild(img);
+    document.body.appendChild(_lb);
+    _lb.addEventListener("click", function (e) { if (e.target === _lb || e.target === close) closeLightbox(); });
+    return _lb;
+  }
+  function openLightbox(src, alt) {
+    var lb = _lightbox();
+    var img = lb.querySelector("img");
+    img.src = src; img.alt = alt || "";
+    lb.classList.add("on");
+    document.documentElement.style.overflow = "hidden";
+    // History-Eintrag: die Zurueck-Geste schliesst die Lightbox statt die App zu verlassen.
+    try { history.pushState({ lb: 1 }, ""); } catch (e) {}
+  }
+  function closeLightbox(fromPop) {
+    if (!_lb || !_lb.classList.contains("on")) return;
+    _lb.classList.remove("on");
+    _lb.querySelector("img").src = "";
+    document.documentElement.style.overflow = "";
+    if (!fromPop) { try { if (history.state && history.state.lb) history.back(); } catch (e) {} }
+  }
+  document.addEventListener("click", function (e) {
+    var a = e.target && e.target.closest ? e.target.closest("a.msg-media") : null;
+    if (a && a.getAttribute("href")) {
+      e.preventDefault();
+      var im = a.querySelector("img");
+      openLightbox(a.getAttribute("href"), im ? im.alt : "");
+    }
+  });
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeLightbox(); });
+  window.addEventListener("popstate", function () { if (_lb && _lb.classList.contains("on")) closeLightbox(true); });
+
   // Minimierte (geschlossene) Konversationen: Map partner -> last_ts beim Schliessen.
   // Persistiert in localStorage, damit die Auswahl Reloads ueberlebt. Trifft spaeter
   // eine neuere Nachricht ein (groesseres last_ts), klappt die Kachel automatisch

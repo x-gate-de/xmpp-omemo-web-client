@@ -830,3 +830,24 @@ a.list-row:hover {
   :root[data-view="signal"] #conv-list .conv-tile.size-l  { grid-column: span 1; }
   :root[data-view="signal"] #conv-list .conv-tile.size-xl { grid-column: span 2; }
 }
+
+/* --- Bild-Lightbox ------------------------------------------------------- */
+/* Bilder oeffnen als In-App-Overlay (statt Navigation zur /media-URL). Im
+   Standalone-PWA gibt es sonst kein "Zurueck" -> App-Deadlock. */
+.lightbox {
+  position: fixed; inset: 0; z-index: 100; display: none;
+  align-items: center; justify-content: center; padding: 20px;
+  background: rgba(0, 0, 0, .86); -webkit-tap-highlight-color: transparent;
+}
+.lightbox.on { display: flex; }
+.lightbox img {
+  max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px;
+  box-shadow: 0 8px 44px rgba(0, 0, 0, .6);
+}
+.lightbox-close {
+  position: absolute; top: max(14px, env(safe-area-inset-top)); right: 16px;
+  width: 44px; height: 44px; border-radius: 50%; border: 0; cursor: pointer;
+  background: rgba(255, 255, 255, .16); color: #fff; font-size: 1.7rem; line-height: 1;
+  display: grid; place-items: center;
+}
+.lightbox-close:hover { background: rgba(255, 255, 255, .26); }
