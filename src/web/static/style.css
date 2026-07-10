@@ -810,17 +810,32 @@ a.list-row:hover {
 
 /* Push-Chats ("wichtig"): Gradientrahmen + sanfter Schein, Heat-Tint bleibt. */
 :root[data-view="signal"] #conv-list .conv-tile.is-push {
-  border: 2px solid transparent;
+  border: 2.5px solid transparent;
   background:
     linear-gradient(155deg,
-      color-mix(in srgb, var(--primary) calc(14% + var(--heat, 0) * 18%), var(--surface)) 0%,
-      var(--surface) 62%) padding-box,
-    linear-gradient(120deg, var(--primary), color-mix(in srgb, var(--primary) 42%, #ffffff)) border-box;
+      color-mix(in srgb, var(--primary) calc(18% + var(--heat, 0) * 18%), var(--surface)) 0%,
+      var(--surface) 60%) padding-box,
+    linear-gradient(120deg, var(--primary), color-mix(in srgb, var(--primary) 45%, #ffffff)) border-box;
 }
 :root[data-view="signal"] #conv-list .conv-tile.is-push::after {
   content: ""; position: absolute; inset: -2px; border-radius: 18px; pointer-events: none;
-  box-shadow: 0 0 22px color-mix(in srgb, var(--primary) 26%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--primary) 55%, transparent),
+              0 0 28px color-mix(in srgb, var(--primary) 38%, transparent);
+  animation: push-pulse 2.6s ease-in-out infinite;
 }
+@keyframes push-pulse { 50% { opacity: .45; } }
+
+/* Push-Chats ("wichtig") deutlich markieren: Glocken-Badge neben dem Namen
+   (in allen Ansichten sichtbar). */
+.push-badge {
+  display: inline-flex; align-items: center; justify-content: center; flex: none;
+  width: 21px; height: 21px; border-radius: 7px; margin-left: 5px;
+  background: var(--primary); color: #fff;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 22%, transparent);
+}
+.push-badge svg { width: 13px; height: 13px; }
+:root[data-view="signal"] #conv-list .size-xl .push-badge { width: 24px; height: 24px; }
+:root[data-view="signal"] #conv-list .size-xl .push-badge svg { width: 15px; height: 15px; }
 
 /* Responsive: Spaltenzahl reduzieren, Groessenklassen einklappen. */
 @media (max-width: 1100px) {

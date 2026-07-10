@@ -293,6 +293,12 @@
     var main = el("span", "row-main");
     var top = el("span", "row-top");
     top.appendChild(el("span", "row-name", it.name));
+    if (it.push) {
+      var pb = el("span", "push-badge");
+      pb.title = "Push aktiv – wichtiger Chat";
+      pb.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>';
+      top.appendChild(pb);
+    }
     var rel = relTime(it.last_ts);
     if (rel) top.appendChild(el("span", "row-rel", rel));
     top.appendChild(el("span", "row-time", it.last));
