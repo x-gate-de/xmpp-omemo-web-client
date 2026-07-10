@@ -773,6 +773,10 @@ a.list-row:hover {
 }
 :root[data-view="signal"] #conv-list .row-name { font-weight: 700; }
 :root[data-view="signal"] #conv-list .size-xl .row-name { font-size: 1.15rem; }
+/* Das Alter steht schon im Gauge -> gruene Relativzeit hier ausblenden (nicht doppelt).
+   Rechts Platz fuer den Ring reservieren, damit der graue Zeitstempel voll sichtbar bleibt. */
+:root[data-view="signal"] #conv-list .row-rel { display: none; }
+:root[data-view="signal"] #conv-list .row-top { padding-right: 56px; }
 :root[data-view="signal"] #conv-list .size-xl .avatar { width: 52px; height: 52px; font-size: 1.1rem; }
 
 /* Kleinere (aeltere) Kacheln: kompakter, ohne Vorschau/Antwortfeld. */
