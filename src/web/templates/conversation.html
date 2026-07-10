@@ -2,7 +2,7 @@
 {% block title %}{{ name }} - Chat{% endblock %}
 {% block content %}
 <div class="conv-head">
-  <span class="avatar {% if is_room %}room{% endif %}" style="--h: {{ hue }}">{{ initials }}</span>
+  <span class="avatar {% if is_room %}room{% endif %}" style="--h: {{ hue }}">{{ initials }}{% if has_avatar %}<img class="av-img" src="/avatar/{{ partner }}?v={{ avatar_ver }}" alt="" loading="lazy">{% endif %}</span>
   <span class="who">
     <div class="name">{{ name }}</div>
     <div class="sub">

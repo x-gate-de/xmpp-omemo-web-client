@@ -931,6 +931,12 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
         contact_name = row["name"] if row else None
         rrow = conn.execute("SELECT name FROM muc_available WHERE room_jid = ?", (partner,)).fetchone()
         room_name = rrow["name"] if rrow else None
+        try:
+            arow = conn.execute(
+                "SELECT hash FROM avatars WHERE jid = ? AND length(data) > 0", (partner,)).fetchone()
+        except sqlite3.OperationalError:
+            arow = None
+        avatar_ver = (arow["hash"] if arow else None) or ""
     finally:
         conn.close()
     name = (room_name if is_room else contact_name) or partner
@@ -943,7 +949,8 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
         partner=partner, name=name, messages=messages, max_id=max_id, pending=_pending(db_path, partner),
         oldest_ts=(oldest["ts_raw"] if oldest else 0), oldest_id=(oldest["id"] if oldest else 0),
         has_more=has_more, is_room=is_room, initials=_initials(name if name != partner else "", partner),
-        hue=_hue(partner), nav_active="archiv", account_jid=acc["jid"],
+        hue=_hue(partner), has_avatar=bool(avatar_ver), avatar_ver=avatar_ver,
+        nav_active="archiv", account_jid=acc["jid"],
         account_state=_account_state(acc["jid"]), push_enabled=_PUSH_ENABLED,
     )
 
