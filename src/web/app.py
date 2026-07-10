@@ -183,6 +183,23 @@ def _fmt_ts(ts):
 _env.globals["fmt_ts"] = lambda ts: _fmt_ts(ts) if ts else "-"
 
 
+# Kompaktes Alter fuer den Gauge-Ring ("<1m", "5m", "3h", "2d", "3w", "5mo", "2y").
+def _age_label(age):
+    if age < 60:
+        return "<1m"
+    if age < 3600:
+        return "%dm" % (age // 60)
+    if age < 86400:
+        return "%dh" % (age // 3600)
+    if age < 7 * 86400:
+        return "%dd" % (age // 86400)
+    if age < 30 * 86400:
+        return "%dw" % (age // (7 * 86400))
+    if age < 365 * 86400:
+        return "%dmo" % (age // (30 * 86400))
+    return "%dy" % (age // (365 * 86400))
+
+
 def _initials(name, jid):
     base = (name or "").strip() or (jid or "").split("@")[0]
     parts = [p for p in base.replace(".", " ").replace("_", " ").replace("-", " ").split() if p]
@@ -369,25 +386,18 @@ def _conv_items(db_path):
                 push_set.add(pr["partner_jid"])
         except sqlite3.OperationalError:
             pass
-        # Aktivitaets-Gauge = Nachrichten/Tag (Schnitt der letzten 7 Tage). Die Anzeige-
-        # zahl ist absolut (kompakt, z.B. "2k"); der Ring-Fuellstand liegt auf einer
-        # absoluten Log-Skala (~200 Nachrichten/Tag = voll) und haengt damit NICHT mehr
-        # relativ vom aktivsten Chat ab.
-        cap = math.log10(1 + 200)
+        # Gauge = Alter der letzten Nachricht (Aktualitaet). Frisch = voller/warmer Ring,
+        # alt = leerer/kuehler Ring; im Ring steht das kompakte Alter. Log-Skala mit
+        # 30 Tagen Horizont (dann leer), damit frische Chats gut auffaechern.
+        now = time.time()
+        horizon = math.log10(1 + 720)  # 720 h = 30 Tage -> leerer Ring
         items = []
         for r in rows:
             is_room = bool(r["is_room"])
             name = r["contact_name"] or r["room_name"] or r["partner"]
-            per_day = (r["recent7"] or 0) / 7.0
-            fill = min(100, round(100 * math.log10(1 + per_day) / cap))
-            if per_day >= 1000:
-                label = "%.0fk" % (per_day / 1000.0)
-            elif per_day >= 1:
-                label = "%.0f" % per_day
-            elif per_day > 0:
-                label = "<1"
-            else:
-                label = "0"
+            age = max(0.0, now - (r["last_ts"] or now))
+            fill = max(0, min(100, round(100 * (1 - math.log10(1 + age / 3600.0) / horizon))))
+            label = _age_label(age)
             items.append({
                 "partner": r["partner"], "name": name, "count": r["cnt"], "last": _fmt_ts(r["last_ts"]),
                 "last_ts": r["last_ts"],

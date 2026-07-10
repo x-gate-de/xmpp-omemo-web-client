@@ -314,7 +314,7 @@
     var glabel = (it.gauge_label != null) ? it.gauge_label : String(act);
     var g = el("span", "gauge " + (act >= 66 ? "hot" : (act >= 33 ? "warm" : "cool")));
     g.setAttribute("aria-hidden", "true");
-    g.setAttribute("title", glabel + " Nachrichten/Tag");
+    g.setAttribute("title", "Letzte Nachricht vor " + glabel);
     g.appendChild(el("span", "n", glabel));
     tile.appendChild(g);
     // Kachel-Aktionen oben rechts: Minimieren (kehrt bei neuer Nachricht zurueck)
