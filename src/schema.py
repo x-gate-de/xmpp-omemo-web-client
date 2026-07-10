@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/schema.py
 # Autor: Torben
-# Version: 1.1.0
+# Version: 1.2.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Zentrales SQLite-Schema fuer Archiv, Outbox, Read-State, Kontakte und MUC.
@@ -160,6 +160,17 @@ def ensure_schema(conn):
         "CREATE TABLE IF NOT EXISTS push_prefs ("
         "  partner_jid TEXT PRIMARY KEY,"
         "  enabled INTEGER NOT NULL DEFAULT 0"
+        ")"
+    )
+    # Avatare je Kontakt (vCard-Foto, XEP-0153/0054). data leer = kein Foto
+    # (Negativ-Marker, damit nicht bei jedem Presence neu geladen wird).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS avatars ("
+        "  jid TEXT PRIMARY KEY,"
+        "  mime TEXT,"
+        "  data BLOB,"
+        "  hash TEXT,"
+        "  updated_ts REAL"
         ")"
     )
     conn.commit()

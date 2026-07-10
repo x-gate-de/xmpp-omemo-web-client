@@ -12,7 +12,7 @@
          data-push="{{ 1 if it.push else 0 }}"
          style="--heat: {{ 1 if it.unread else 0 }}; --gauge: {{ '%.3f'|format(it.activity / 100) }}">
       <a class="conv-open" href="/c/{{ it.partner }}">
-        <span class="avatar {% if it.is_room %}room{% endif %}" style="--h: {{ it.hue }}">{{ it.initials }}</span>
+        <span class="avatar {% if it.is_room %}room{% endif %}" style="--h: {{ it.hue }}">{{ it.initials }}{% if it.has_avatar %}<img class="av-img" src="/avatar/{{ it.partner }}?v={{ it.avatar_ver }}" alt="" loading="lazy">{% endif %}</span>
         <span class="row-main">
           <span class="row-top">
             <span class="row-name">{{ it.name }}</span>

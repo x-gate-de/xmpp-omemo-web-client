@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben
-# Version: 2.10.0
+# Version: 2.11.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -68,7 +68,7 @@ def _asset_version():
 _env.globals["asset_ver"] = _asset_version()
 
 # Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog).
-APP_VERSION = "1.8.0"
+APP_VERSION = "1.9.0"
 CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
 HELP_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/ANLEITUNG.md"
 _env.globals["app_version"] = APP_VERSION
@@ -386,6 +386,13 @@ def _conv_items(db_path):
                 push_set.add(pr["partner_jid"])
         except sqlite3.OperationalError:
             pass
+        # Kontakte mit Avatar-Foto (jid -> Hash fuer Cache-Busting).
+        avatar_ver = {}
+        try:
+            for ar in conn.execute("SELECT jid, hash FROM avatars WHERE length(data) > 0"):
+                avatar_ver[ar["jid"]] = ar["hash"] or ""
+        except sqlite3.OperationalError:
+            pass
         # Gauge = Alter der letzten Nachricht (Aktualitaet). Frisch = voller/warmer Ring,
         # alt = leerer/kuehler Ring; im Ring steht das kompakte Alter. Log-Skala mit
         # 30 Tagen Horizont (dann leer), damit frische Chats gut auffaechern.
@@ -409,6 +416,8 @@ def _conv_items(db_path):
                 "push": r["partner"] in push_set,
                 "activity": fill,
                 "gauge_label": label,
+                "has_avatar": r["partner"] in avatar_ver,
+                "avatar_ver": avatar_ver.get(r["partner"], ""),
             })
     finally:
         conn.close()
@@ -882,6 +891,24 @@ def conversations(acc: dict = Depends(require_account)):
 @app.get("/api/conversations")
 def api_conversations(acc: dict = Depends(require_account)):
     return _conv_items(acc["archive_path"])
+
+
+# Liefert das gespeicherte Avatar-Foto eines Kontakts (nur aus dem eigenen Archiv).
+@app.get("/avatar/{jid}")
+def avatar(jid: str, acc: dict = Depends(require_account)):
+    conn = _open_ro(acc["archive_path"])
+    try:
+        row = conn.execute("SELECT mime, data, hash FROM avatars WHERE jid = ?", (jid,)).fetchone()
+    except sqlite3.OperationalError:
+        row = None
+    finally:
+        conn.close()
+    if not row or not row["data"]:
+        raise HTTPException(status_code=404)
+    return Response(
+        content=bytes(row["data"]), media_type=row["mime"] or "image/png",
+        headers={"Cache-Control": "private, max-age=604800", "ETag": '"%s"' % (row["hash"] or "")},
+    )
 
 
 @app.get("/search", response_class=HTMLResponse)

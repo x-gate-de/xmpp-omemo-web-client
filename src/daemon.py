@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben
-# Version: 1.5.0
+# Version: 1.6.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -21,6 +21,7 @@
 import asyncio
 import base64
 import datetime
+import hashlib
 import io
 import json
 import logging
@@ -144,6 +145,8 @@ class ArchiverBot(ClientXMPP):
         self.register_plugin("xep_0313")  # Message Archive Management (MAM)
         self.register_plugin("xep_0363")  # HTTP File Upload (Anhaenge)
         self.register_plugin("xep_0066")  # Out of Band Data (oob)
+        self.register_plugin("xep_0054")  # vCard-temp (Kontakt-Fotos)
+        self.register_plugin("xep_0153")  # vCard-basierte Avatare (Presence-Hash)
         self.register_plugin(
             "xep_0384",
             {"state_db_path": config["omemo"]["state_path"]},
@@ -158,6 +161,8 @@ class ArchiverBot(ClientXMPP):
         self.add_event_handler("receipt_received", self._on_receipt)
         self.add_event_handler("roster_update", lambda _e: self._persist_roster())
         self.add_event_handler("disconnected", self._on_disconnected)
+        # Avatar-Aenderung eines Kontakts (Foto-Hash in dessen Presence, XEP-0153).
+        self.add_event_handler("vcard_avatar_update", self._on_vcard_avatar)
 
     async def _on_session_start(self, _event):
         self.send_presence()
@@ -188,6 +193,7 @@ class ArchiverBot(ClientXMPP):
             self._loops_started = True
             asyncio.create_task(self._discover_rooms())
             asyncio.create_task(self._outbox_loop())
+            asyncio.create_task(self._avatar_sweep())
 
     # Verbindung verloren -> kein Senden mehr, bis die Sitzung wieder steht.
     def _on_disconnected(self, _event):
@@ -205,6 +211,57 @@ class ArchiverBot(ClientXMPP):
                 self._archive.upsert_contact(jid, item["name"] or "", item["subscription"] or "")
         except Exception as e:
             logger.warning("Roster-Persistenz fehlgeschlagen: %s", type(e).__name__)
+
+    # --- Avatare (vCard-Foto, XEP-0153/0054) --------------------------------
+
+    # Loest das vCard-Foto eines Kontakts auf und speichert es (oder einen
+    # Negativ-Marker, wenn kein Foto vorhanden ist).
+    async def _fetch_avatar(self, jid):
+        try:
+            iq = await self["xep_0054"].get_vcard(jid=jid, timeout=10)
+            vc = iq["vcard_temp"]
+            data = bytes(vc["PHOTO"]["BINVAL"] or b"")
+            mime = vc["PHOTO"]["TYPE"] or "image/png"
+        except Exception as e:
+            logger.debug("vCard-Abruf %s fehlgeschlagen: %s", jid, type(e).__name__)
+            return
+        if data:
+            self._archive.store_avatar(jid, mime, data, hashlib.sha1(data).hexdigest())
+            logger.info("Avatar gespeichert: %s (%d Bytes)", jid, len(data))
+        else:
+            # Kein Foto -> Negativ-Marker (nicht bei jeder Presence neu laden).
+            self._archive.store_avatar(jid, "", b"", "none")
+
+    # Presence eines Kontakts trug einen (geaenderten) Foto-Hash -> Avatar holen.
+    async def _on_vcard_avatar(self, pres):
+        try:
+            jid = JID(pres["from"]).bare
+            if jid == self._own_bare:
+                return
+            photo_hash = pres["vcard_temp_update"]["photo"]
+            if not photo_hash:
+                return
+            if self._archive.avatar_hash(jid) == photo_hash:
+                return  # unveraendert
+            await self._fetch_avatar(jid)
+        except Exception as e:
+            logger.debug("Avatar-Update %s: %s", pres["from"], type(e).__name__)
+
+    # Einmaliger Hintergrund-Sweep: Avatare fuer Roster-Kontakte holen, die wir noch
+    # nicht kennen (rate-limitiert). Presence-Updates halten sie danach aktuell.
+    async def _avatar_sweep(self):
+        await asyncio.sleep(8)  # Roster/Presence erst ankommen lassen
+        try:
+            jids = [j for j in self.client_roster.keys() if j != self._own_bare]
+        except Exception:
+            return
+        for jid in jids:
+            try:
+                if self._archive.avatar_hash(jid) is None:
+                    await self._fetch_avatar(jid)
+            except Exception:
+                pass
+            await asyncio.sleep(0.4)  # den XMPP-Server nicht fluten
 
     # Oeffentliche MUC-Raeume des Servers entdecken und speichern.
     async def _discover_rooms(self):

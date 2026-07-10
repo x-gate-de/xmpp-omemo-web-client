@@ -3,6 +3,14 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.9.0] - 2026-07-10
+- Contact avatars: the daemon fetches contacts' vCard photos (XEP-0153/0054) and
+  stores them per account. The web UI shows them in the chat list instead of the
+  initials (the colored initials circle stays as a fallback when no photo is set).
+  Updated via the presence photo hash; a one-time, rate-limited roster sweep on
+  start. Served only from the user's own archive (`/avatar/<jid>`). Rooms keep the
+  initials icon.
+
 ## [1.8.0] - 2026-07-10
 - Bugfix image view in standalone PWA: tapping an image navigated the app to the
   image URL; without browser chrome there was no "back" -> the app got stuck

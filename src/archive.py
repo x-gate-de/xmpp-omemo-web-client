@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/archive.py
 # Autor: Torben
-# Version: 1.2.0
+# Version: 1.3.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Schreibseite des Daemons: Archiv, Outbox, Kontakte (Roster) und MUC-Raeume.
@@ -157,6 +157,22 @@ class MessageArchive:
             (jid, name, subscription),
         )
         self._conn.commit()
+
+    # --- Avatare (vCard-Foto) -----------------------------------------------
+
+    # Speichert das Avatar-Foto eines Kontakts. data leer = Negativ-Marker
+    # (Kontakt hat kein Foto), damit nicht bei jedem Presence neu geladen wird.
+    def store_avatar(self, jid, mime, data, ahash):
+        self._conn.execute(
+            "INSERT OR REPLACE INTO avatars (jid, mime, data, hash, updated_ts) VALUES (?, ?, ?, ?, ?)",
+            (jid, mime or "", data or b"", ahash or "", time.time()),
+        )
+        self._conn.commit()
+
+    # Gespeicherter Foto-Hash (zum Abgleich mit dem Presence-Hash) oder None.
+    def avatar_hash(self, jid):
+        row = self._conn.execute("SELECT hash FROM avatars WHERE jid = ?", (jid,)).fetchone()
+        return row[0] if row else None
 
     # --- MUC ----------------------------------------------------------------
 

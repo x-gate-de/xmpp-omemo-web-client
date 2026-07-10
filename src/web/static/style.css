@@ -163,6 +163,8 @@ a { color: inherit; }
 /* --- Avatare ------------------------------------------------------------- */
 .avatar {
   flex: none;
+  position: relative;
+  overflow: hidden;
   width: 44px;
   height: 44px;
   border-radius: 50%;
@@ -176,6 +178,8 @@ a { color: inherit; }
   user-select: none;
 }
 .avatar.room { border-radius: 30%; background: linear-gradient(140deg, hsl(var(--h, 215) 46% 50%), hsl(calc(var(--h, 215) + 26) 42% 34%)); }
+/* Echtes vCard-Foto ueberdeckt die Initialen (Fallback bleibt darunter). */
+.av-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 
 /* --- Listen (Chats / Kontakte / Raeume) ---------------------------------- */
 .list { display: flex; flex-direction: column; gap: 8px; }

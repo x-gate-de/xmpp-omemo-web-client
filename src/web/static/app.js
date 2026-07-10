@@ -38,9 +38,15 @@
     return span.firstChild;
   }
 
-  function avatar(initials, hue, room) {
+  function avatar(initials, hue, room, avjid, ver) {
     var a = el("span", "avatar" + (room ? " room" : ""), initials);
     a.style.setProperty("--h", hue);
+    if (avjid) {
+      var img = document.createElement("img");
+      img.className = "av-img"; img.alt = ""; img.loading = "lazy";
+      img.src = "/avatar/" + encodeURIComponent(avjid) + (ver ? "?v=" + encodeURIComponent(ver) : "");
+      a.appendChild(img);
+    }
     return a;
   }
 
@@ -267,7 +273,7 @@
     var chip = document.createElement("button");
     chip.type = "button"; chip.className = "conv-chip";
     chip.title = "Wieder oeffnen: " + it.name;
-    chip.appendChild(avatar(it.initials, it.hue, it.is_room));
+    chip.appendChild(avatar(it.initials, it.hue, it.is_room, it.has_avatar ? it.partner : null, it.avatar_ver));
     chip.appendChild(el("span", "chip-name", it.name));
     if (it.unread) chip.appendChild(el("span", "pill unread", String(it.unread)));
     chip.addEventListener("click", onClick);
@@ -289,7 +295,7 @@
     tile.style.setProperty("--heat", it.unread ? 1 : 0);
     tile.style.setProperty("--gauge", ((it.activity || 0) / 100).toFixed(3));
     var a = el("a", "conv-open"); a.href = "/c/" + it.partner;
-    a.appendChild(avatar(it.initials, it.hue, it.is_room));
+    a.appendChild(avatar(it.initials, it.hue, it.is_room, it.has_avatar ? it.partner : null, it.avatar_ver));
     var main = el("span", "row-main");
     var top = el("span", "row-top");
     top.appendChild(el("span", "row-name", it.name));
