@@ -229,8 +229,20 @@
     return chip;
   }
 
-  function renderConvRow(it) {
-    var tile = el("div", "list-row conv-tile" + (it.unread ? " has-unread" : ""));
+  // Bento-Groesse nach Aktualitaets-Rang (neuester Chat gross, aeltere kleiner).
+  function convSize(rank) {
+    if (rank === 0) return " size-xl";
+    if (rank < 3) return " size-l";
+    if (rank >= 9) return " size-s";
+    return "";
+  }
+
+  function renderConvRow(it, rank) {
+    var tile = el("div", "list-row conv-tile" + convSize(rank || 0)
+      + (it.unread ? " has-unread" : "") + (it.push ? " is-push" : ""));
+    if (it.push) tile.setAttribute("data-push", "1");
+    tile.style.setProperty("--heat", it.unread ? 1 : 0);
+    tile.style.setProperty("--gauge", ((it.activity || 0) / 100).toFixed(3));
     var a = el("a", "conv-open"); a.href = "/c/" + it.partner;
     a.appendChild(avatar(it.initials, it.hue, it.is_room));
     var main = el("span", "row-main");
@@ -252,6 +264,12 @@
     }
     a.appendChild(main);
     tile.appendChild(a);
+    // Aktivitaets-Gauge (Ring, nur in der Signalfeld-Ansicht sichtbar).
+    var act = it.activity || 0;
+    var g = el("span", "gauge " + (act >= 66 ? "hot" : (act >= 33 ? "warm" : "cool")));
+    g.setAttribute("aria-hidden", "true");
+    g.appendChild(el("span", "n", String(act)));
+    tile.appendChild(g);
     // Kachel-Aktionen oben rechts: Minimieren (kehrt bei neuer Nachricht zurueck)
     // und Schliessen (bleibt ausgeblendet; Daten bleiben erhalten).
     var actions = el("span", "tile-actions");
@@ -343,7 +361,7 @@
         });
         if (dirty) setCollapsed(collapsed);
         list.textContent = "";
-        visible.forEach(function (it) { list.appendChild(renderConvRow(it)); });
+        visible.forEach(function (it, idx) { list.appendChild(renderConvRow(it, idx)); });
         if (hidden.length) {
           var tray = el("div", "collapsed-tray");
           tray.appendChild(el("span", "tray-label", "Minimiert (" + hidden.length + ")"));

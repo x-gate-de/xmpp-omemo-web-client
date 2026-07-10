@@ -14,6 +14,7 @@
 # - Zeigt entschluesselte private Nachrichten (Schutzbedarf HOCH).
 # -----------------------------------------------------------------------------
 
+import math
 import os
 import sqlite3
 import ssl
@@ -348,6 +349,7 @@ def _conv_items(db_path):
         rows = conn.execute(
             "SELECT m.partner_jid AS partner, COUNT(*) AS cnt, MAX(m.ts_received) AS last_ts, "
             "  SUM(CASE WHEN m.decrypted = 0 THEN 1 ELSE 0 END) AS undecrypted, "
+            "  SUM(CASE WHEN m.ts_received > " + str(time.time() - 604800) + " THEN 1 ELSE 0 END) AS recent7, "
             "  SUM(CASE WHEN m.direction = 'in' AND m.ts_received > "
             "      COALESCE((SELECT last_read_ts FROM read_state r WHERE r.partner_jid = m.partner_jid), 0) "
             "    THEN 1 ELSE 0 END) AS unread, "
@@ -359,10 +361,22 @@ def _conv_items(db_path):
             "  EXISTS(SELECT 1 FROM mucs g WHERE g.room_jid = m.partner_jid) AS is_room "
             "FROM messages m WHERE " + _nonempty("m.") + " GROUP BY m.partner_jid ORDER BY last_ts DESC"
         ).fetchall()
+        # Push-aktivierte Chats (die "wichtigen") einsammeln -- tolerant, falls die
+        # Tabelle in aelteren Archiven fehlt.
+        push_set = set()
+        try:
+            for pr in conn.execute("SELECT partner_jid FROM push_prefs WHERE enabled = 1"):
+                push_set.add(pr["partner_jid"])
+        except sqlite3.OperationalError:
+            pass
+        # Aktivitaets-Gauge (0-100): Nachrichten der letzten 7 Tage, log-normiert auf
+        # den aktivsten Chat -> vergleichbarer Ring wie NextUps Score.
+        log_max = math.log1p(max((r["recent7"] or 0) for r in rows)) if rows else 0
         items = []
         for r in rows:
             is_room = bool(r["is_room"])
             name = r["contact_name"] or r["room_name"] or r["partner"]
+            activity = round(100 * math.log1p(r["recent7"] or 0) / log_max) if log_max > 0 else 0
             items.append({
                 "partner": r["partner"], "name": name, "count": r["cnt"], "last": _fmt_ts(r["last_ts"]),
                 "last_ts": r["last_ts"],
@@ -371,6 +385,8 @@ def _conv_items(db_path):
                 "initials": _initials(name if name != r["partner"] else "", r["partner"]),
                 "hue": _hue(r["partner"]),
                 "recent": _recent(conn, r["partner"]),
+                "push": r["partner"] in push_set,
+                "activity": activity,
             })
     finally:
         conn.close()

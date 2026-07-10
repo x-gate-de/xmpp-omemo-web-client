@@ -171,10 +171,11 @@ a { color: inherit; }
   color: #fff;
   font-weight: 600;
   font-size: 0.95rem;
-  background: hsl(var(--h, 215) 58% 48%);
+  /* Farbverlauf statt flacher Flaeche (Anlehnung an NextUps Gradient-Chips). */
+  background: linear-gradient(140deg, hsl(var(--h, 215) 66% 56%), hsl(calc(var(--h, 215) + 26) 58% 40%));
   user-select: none;
 }
-.avatar.room { border-radius: 30%; background: hsl(var(--h, 215) 45% 42%); }
+.avatar.room { border-radius: 30%; background: linear-gradient(140deg, hsl(var(--h, 215) 46% 50%), hsl(calc(var(--h, 215) + 26) 42% 34%)); }
 
 /* --- Listen (Chats / Kontakte / Raeume) ---------------------------------- */
 .list { display: flex; flex-direction: column; gap: 8px; }
@@ -723,4 +724,109 @@ a.list-row:hover {
   .tab span { display: none; }
   .tab { padding: 9px; }
   .msg { max-width: 84%; }
+}
+
+/* =============================================================================
+   Aktivitaets-Gauge + Push-Markierung + Signalfeld-Ansicht (data-view="signal").
+   Uebertraegt NextUps "Signalfeld" auf Chat: neuester Chat gross, aeltere kleiner
+   (Bento), ungelesene mit Heat-Tint, Aktivitaet als Ring-Gauge, Push-Chats als
+   "wichtig" mit Gradientrahmen. Gauge existiert immer im DOM, ist aber nur hier
+   sichtbar; Liste/Raster bleiben unveraendert.
+   ============================================================================= */
+.gauge { display: none; }
+
+/* Push-aktivierte Chats: durchgehend eingefaerbte Akzentkante (alle Ansichten). */
+.conv-tile.is-push { border-left-color: var(--primary); }
+
+:root[data-view="signal"] .main:has(.list) { max-width: none; }
+:root[data-view="signal"] .appbar-inner { max-width: none; }
+
+:root[data-view="signal"] #conv-list {
+  display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px;
+}
+
+/* Grundform der Kachel im Signalfeld (Bento-Karte). */
+:root[data-view="signal"] #conv-list .conv-tile {
+  grid-column: span 2;                    /* normal */
+  flex-direction: column; align-items: stretch; min-height: 0;
+  border-radius: 18px; padding: 15px 16px; position: relative;
+  /* Heat-Tint: ungelesene Chats bekommen einen warmen Akzent-Hintergrund. */
+  background: linear-gradient(155deg,
+    color-mix(in srgb, var(--primary) calc(var(--heat, 0) * 22%), var(--surface)) 0%,
+    var(--surface) 60%);
+}
+:root[data-view="signal"] #conv-list .conv-tile.size-l  { grid-column: span 3; }
+:root[data-view="signal"] #conv-list .conv-tile.size-xl { grid-column: span 6; }
+:root[data-view="signal"] #conv-list .conv-tile:hover {
+  transform: translateY(-3px); box-shadow: var(--shadow-hover);
+}
+
+/* Vorschau-Zeilen im Signalfeld zeigen (wie im Raster), Einzeiler ausblenden. */
+:root[data-view="signal"] #conv-list .row-preview { display: none; }
+:root[data-view="signal"] #conv-list .conv-recent {
+  display: flex; flex-direction: column; justify-content: flex-end;
+  margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border); font-size: 0.84rem;
+  max-height: calc(var(--conv-lines, 4) * 1.5em + 10px); overflow: hidden;
+}
+:root[data-view="signal"] #conv-list .tile-compose {
+  display: flex; gap: 7px; margin-top: 10px; padding-top: 10px; border-top: 1px dashed var(--border);
+}
+:root[data-view="signal"] #conv-list .row-name { font-weight: 700; }
+:root[data-view="signal"] #conv-list .size-xl .row-name { font-size: 1.15rem; }
+:root[data-view="signal"] #conv-list .size-xl .avatar { width: 52px; height: 52px; font-size: 1.1rem; }
+
+/* Kleinere (aeltere) Kacheln: kompakter, ohne Vorschau/Antwortfeld. */
+:root[data-view="signal"] #conv-list .conv-tile.size-s { padding: 11px 13px; }
+:root[data-view="signal"] #conv-list .conv-tile.size-s .conv-recent,
+:root[data-view="signal"] #conv-list .conv-tile.size-s .tile-compose { display: none; }
+:root[data-view="signal"] #conv-list .conv-tile.size-s .avatar { width: 34px; height: 34px; font-size: 0.8rem; }
+
+/* Aktivitaets-Gauge: Ring oben rechts; Farbe nach Aktivitaet (hot/warm/cool). */
+:root[data-view="signal"] .gauge {
+  display: grid; place-items: center; position: absolute; top: 13px; right: 13px;
+  width: 44px; height: 44px; border-radius: 50%;
+  background: conic-gradient(var(--gc) calc(var(--gauge, 0) * 1turn),
+    color-mix(in srgb, var(--muted) 24%, transparent) 0);
+  transition: opacity .15s ease;
+}
+:root[data-view="signal"] .gauge::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--surface); }
+:root[data-view="signal"] .gauge .n {
+  position: relative; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+:root[data-view="signal"] .gauge.hot  { --gc: var(--danger); }
+:root[data-view="signal"] .gauge.warm { --gc: #d97706; }
+:root[data-view="signal"] .gauge.cool { --gc: var(--primary); }
+:root[data-view="signal"] .gauge.hot .n  { color: var(--danger); }
+:root[data-view="signal"] .gauge.warm .n { color: #d97706; }
+:root[data-view="signal"] .gauge.cool .n { color: var(--primary); }
+/* Beim Hover blendet der Ring aus, damit Minimieren/Schliessen Platz haben. */
+:root[data-view="signal"] .conv-tile:hover .gauge { opacity: 0; }
+:root[data-view="signal"] .conv-tile .tile-actions { top: 13px; right: 13px; }
+
+/* Push-Chats ("wichtig"): Gradientrahmen + sanfter Schein, Heat-Tint bleibt. */
+:root[data-view="signal"] #conv-list .conv-tile.is-push {
+  border: 2px solid transparent;
+  background:
+    linear-gradient(155deg,
+      color-mix(in srgb, var(--primary) calc(14% + var(--heat, 0) * 18%), var(--surface)) 0%,
+      var(--surface) 62%) padding-box,
+    linear-gradient(120deg, var(--primary), color-mix(in srgb, var(--primary) 42%, #ffffff)) border-box;
+}
+:root[data-view="signal"] #conv-list .conv-tile.is-push::after {
+  content: ""; position: absolute; inset: -2px; border-radius: 18px; pointer-events: none;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--primary) 26%, transparent);
+}
+
+/* Responsive: Spaltenzahl reduzieren, Groessenklassen einklappen. */
+@media (max-width: 1100px) {
+  :root[data-view="signal"] #conv-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  :root[data-view="signal"] #conv-list .conv-tile.size-xl { grid-column: span 4; }
+  :root[data-view="signal"] #conv-list .conv-tile.size-l  { grid-column: span 2; }
+}
+@media (max-width: 640px) {
+  :root[data-view="signal"] #conv-list { grid-template-columns: 1fr 1fr; }
+  :root[data-view="signal"] #conv-list .conv-tile,
+  :root[data-view="signal"] #conv-list .conv-tile.size-l  { grid-column: span 1; }
+  :root[data-view="signal"] #conv-list .conv-tile.size-xl { grid-column: span 2; }
 }

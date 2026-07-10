@@ -7,7 +7,10 @@
 
 <div class="list" id="conv-list">
   {% for it in items %}
-    <div class="list-row conv-tile {% if it.unread %}has-unread{% endif %}">
+    {% set sz = 'size-xl' if loop.index0 == 0 else ('size-l' if loop.index0 < 3 else ('size-s' if loop.index0 >= 9 else '')) %}
+    <div class="list-row conv-tile {{ sz }} {% if it.unread %}has-unread{% endif %} {% if it.push %}is-push{% endif %}"
+         data-push="{{ 1 if it.push else 0 }}"
+         style="--heat: {{ 1 if it.unread else 0 }}; --gauge: {{ '%.3f'|format(it.activity / 100) }}">
       <a class="conv-open" href="/c/{{ it.partner }}">
         <span class="avatar {% if it.is_room %}room{% endif %}" style="--h: {{ it.hue }}">{{ it.initials }}</span>
         <span class="row-main">
@@ -24,6 +27,7 @@
           </span>
         </span>
       </a>
+      <span class="gauge {{ 'hot' if it.activity >= 66 else ('warm' if it.activity >= 33 else 'cool') }}" aria-hidden="true"><span class="n">{{ it.activity }}</span></span>
       <form class="tile-compose" method="post" action="/c/{{ it.partner }}/send">
         <input type="text" name="body" placeholder="Antwort …" autocomplete="off" aria-label="Antwort an {{ it.name }}">
         <button type="submit" aria-label="Senden">
