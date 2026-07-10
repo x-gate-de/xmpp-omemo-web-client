@@ -369,14 +369,25 @@ def _conv_items(db_path):
                 push_set.add(pr["partner_jid"])
         except sqlite3.OperationalError:
             pass
-        # Aktivitaets-Gauge (0-100): Nachrichten der letzten 7 Tage, log-normiert auf
-        # den aktivsten Chat -> vergleichbarer Ring wie NextUps Score.
-        log_max = math.log1p(max((r["recent7"] or 0) for r in rows)) if rows else 0
+        # Aktivitaets-Gauge = Nachrichten/Tag (Schnitt der letzten 7 Tage). Die Anzeige-
+        # zahl ist absolut (kompakt, z.B. "2k"); der Ring-Fuellstand liegt auf einer
+        # absoluten Log-Skala (~200 Nachrichten/Tag = voll) und haengt damit NICHT mehr
+        # relativ vom aktivsten Chat ab.
+        cap = math.log10(1 + 200)
         items = []
         for r in rows:
             is_room = bool(r["is_room"])
             name = r["contact_name"] or r["room_name"] or r["partner"]
-            activity = round(100 * math.log1p(r["recent7"] or 0) / log_max) if log_max > 0 else 0
+            per_day = (r["recent7"] or 0) / 7.0
+            fill = min(100, round(100 * math.log10(1 + per_day) / cap))
+            if per_day >= 1000:
+                label = "%.0fk" % (per_day / 1000.0)
+            elif per_day >= 1:
+                label = "%.0f" % per_day
+            elif per_day > 0:
+                label = "<1"
+            else:
+                label = "0"
             items.append({
                 "partner": r["partner"], "name": name, "count": r["cnt"], "last": _fmt_ts(r["last_ts"]),
                 "last_ts": r["last_ts"],
@@ -386,7 +397,8 @@ def _conv_items(db_path):
                 "hue": _hue(r["partner"]),
                 "recent": _recent(conn, r["partner"]),
                 "push": r["partner"] in push_set,
-                "activity": activity,
+                "activity": fill,
+                "gauge_label": label,
             })
     finally:
         conn.close()

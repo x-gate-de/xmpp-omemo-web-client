@@ -266,9 +266,11 @@
     tile.appendChild(a);
     // Aktivitaets-Gauge (Ring, nur in der Signalfeld-Ansicht sichtbar).
     var act = it.activity || 0;
+    var glabel = (it.gauge_label != null) ? it.gauge_label : String(act);
     var g = el("span", "gauge " + (act >= 66 ? "hot" : (act >= 33 ? "warm" : "cool")));
     g.setAttribute("aria-hidden", "true");
-    g.appendChild(el("span", "n", String(act)));
+    g.setAttribute("title", glabel + " Nachrichten/Tag");
+    g.appendChild(el("span", "n", glabel));
     tile.appendChild(g);
     // Kachel-Aktionen oben rechts: Minimieren (kehrt bei neuer Nachricht zurueck)
     // und Schliessen (bleibt ausgeblendet; Daten bleiben erhalten).

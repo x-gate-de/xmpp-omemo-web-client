@@ -27,7 +27,7 @@
           </span>
         </span>
       </a>
-      <span class="gauge {{ 'hot' if it.activity >= 66 else ('warm' if it.activity >= 33 else 'cool') }}" aria-hidden="true"><span class="n">{{ it.activity }}</span></span>
+      <span class="gauge {{ 'hot' if it.activity >= 66 else ('warm' if it.activity >= 33 else 'cool') }}" title="{{ it.gauge_label }} Nachrichten/Tag" aria-hidden="true"><span class="n">{{ it.gauge_label }}</span></span>
       <form class="tile-compose" method="post" action="/c/{{ it.partner }}/send">
         <input type="text" name="body" placeholder="Antwort …" autocomplete="off" aria-label="Antwort an {{ it.name }}">
         <button type="submit" aria-label="Senden">
