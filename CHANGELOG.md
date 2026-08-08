@@ -34,6 +34,18 @@
   warning, the connecting state and the gauge) and was therefore never adapted for
   dark mode.
 
+## [1.9.1] - 2026-07-22
+- Bugfix room sending after a reconnect: on a dropped connection the XMPP server
+  discards the daemon's MUC presence (it is out of every room). The in-memory set
+  of joined rooms was not reset, so the reconnect triggered NO rejoin. As a result
+  the daemon received no more room messages, and every group message it sent was
+  silently rejected by the server (no reflection, no exception) — while the log
+  wrongly recorded "sent (group)". Fix: `_on_disconnected` now clears the joined
+  rooms, and the reconnect rejoins all of them.
+- Visibility/self-healing: incoming error stanzas (`<message type="error">`) are no
+  longer silently dropped. If a MUC rejects a message it is logged as a WARNING and
+  the room is queued for a rejoin (daemon.py 1.7.0).
+
 ## [1.9.0] - 2026-07-10
 - Contact avatars: the daemon fetches contacts' vCard photos (XEP-0153/0054) and
   stores them per account. The web UI shows them in the chat list instead of the

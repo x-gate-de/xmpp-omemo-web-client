@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben
-# Version: 1.6.0
+# Version: 1.7.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -198,6 +198,14 @@ class ArchiverBot(ClientXMPP):
     # Verbindung verloren -> kein Senden mehr, bis die Sitzung wieder steht.
     def _on_disconnected(self, _event):
         self._session_ready = False
+        # Beim Verbindungsabbruch entfernt der XMPP-Server unsere MUC-Praesenz:
+        # Wir sind serverseitig aus allen Raeumen raus. Der in-memory-Merker muss
+        # das nachziehen, sonst ueberspringt _join_pending_rooms den Neubeitritt
+        # (Raum steht ja noch als "beigetreten" drin) und der Daemon sendet
+        # groupchat-Nachrichten in Raeume, in denen er kein Teilnehmer mehr ist.
+        # Der Server lehnt diese still ab (kein Reflex, keine Exception) -> die
+        # Nachricht erscheint nie im Raum. Leeren erzwingt den Rejoin nach Reconnect.
+        self._joined_rooms.clear()
         logger.info("Verbindung getrennt -- warte auf Reconnect")
 
     # Roster in die contacts-Tabelle schreiben (Quelle der Userliste in der UI).
@@ -339,6 +347,21 @@ class ArchiverBot(ClientXMPP):
     async def _on_message(self, stanza):
         # Gruppenchat laeuft ueber groupchat_message; Carbons ueber eigene Handler.
         if stanza["type"] == "groupchat":
+            return
+        # Fehler-Stanzas machten den Kernfehler bislang unsichtbar: Lehnt ein MUC
+        # unsere Nachricht ab (z.B. weil wir kein Teilnehmer mehr sind), kam die
+        # Ablehnung als <message type="error"> zurueck und wurde hier verworfen,
+        # waehrend _send_groupchat bereits "Gesendet" verbucht hatte. Jetzt sichtbar
+        # machen und den Raum zum Neubeitritt markieren (Selbstheilung).
+        if stanza["type"] == "error":
+            frm = stanza["from"]
+            condition = stanza["error"]["condition"] or "unbekannt"
+            if frm.domain.startswith("conference."):
+                self._joined_rooms.discard(frm.bare)
+                logger.warning("Raum %s wies Nachricht ab (%s) -- Neubeitritt vorgemerkt",
+                               frm.bare, condition)
+            else:
+                logger.warning("Fehler-Stanza von %s: %s", frm.bare, condition)
             return
         partner = stanza["from"].bare
         if partner == self._own_bare:
