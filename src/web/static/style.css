@@ -9,10 +9,15 @@
    heller, kuehler Grund; --primary = waehlbarer Akzent, --accent = OK-Gruen
    (online/ungelesen/aktiv), --danger = Prioritaets-Rot. */
 :root {
+  /* Schriftfamilie als Token, damit ein Design-Preset sie austauschen kann
+     (das Leitstand-Preset setzt durchgehend monospace). */
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --primary: #2563eb;
   --primary-hover: #1d4ed8;
   --on-primary: #ffffff;
   --accent: #1e7e45;
+  /* Warnfarbe (Trust-Warnung, Verbindungsaufbau) - stand vorher hart im Code. */
+  --warn: #d97706;
   --bg: #f6f8fc;
   --surface: #ffffff;
   --surface-2: #eef2fc;
@@ -33,6 +38,7 @@
 /* Dunkel: GitHub-neutrale Grautoene (wie NextUp) statt blaustichig. */
 :root[data-theme="dark"] {
   --accent: #3fb950;
+  --warn: #d29922;
   --bg: #0d1117;
   --surface: #161b22;
   --surface-2: #21262d;
@@ -48,6 +54,7 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --accent: #3fb950;
+    --warn: #d29922;
     --bg: #0d1117;
     --surface: #161b22;
     --surface-2: #21262d;
@@ -96,7 +103,7 @@ body {
   min-height: 100%;
   background: var(--bg);
   color: var(--fg);
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font);
   font-size: 16px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -132,7 +139,11 @@ a { color: inherit; }
   text-decoration: none;
   color: var(--fg);
 }
-.brand-mark { color: var(--primary); flex: none; border-radius: 7px; }
+.brand-mark { color: var(--primary); flex: none; }
+/* Der Cursor im Markenzeichen blinkt wie ein Terminal-Prompt ("laeuft mit").
+   Die globale prefers-reduced-motion-Regel schaltet ihn ab. */
+.brand-caret { animation: brand-blink 1.6s steps(1) infinite; }
+@keyframes brand-blink { 50% { opacity: .25; } }
 .tabs { display: flex; gap: 4px; margin-left: auto; }
 .tab {
   display: inline-flex;
@@ -388,7 +399,7 @@ a.list-row:hover {
 .dev-trust { margin-left: auto; font-size: 0.76rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; }
 .dev-trust.ok { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
 .dev-trust.muted { background: var(--surface-2); color: var(--muted); }
-.dev-trust.warn { background: color-mix(in srgb, #f59e0b 20%, transparent); color: #d97706; }
+.dev-trust.warn { background: color-mix(in srgb, var(--warn) 20%, transparent); color: var(--warn); }
 .dev-trust.bad { background: color-mix(in srgb, var(--danger) 16%, transparent); color: var(--danger); }
 .dev-fp { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 0.82rem; color: var(--muted); word-break: break-all; line-height: 1.6; }
 .dev-actions { display: flex; gap: 8px; margin-top: 10px; }
@@ -675,7 +686,7 @@ a.list-row:hover {
 .online-btn:hover { border-color: color-mix(in srgb, var(--primary) 40%, var(--border)); }
 .online-btn .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); flex: none; }
 .online-btn.on .dot { background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
-.online-btn.connecting .dot { background: #f59e0b; animation: pulse 1.1s ease-in-out infinite; }
+.online-btn.connecting .dot { background: var(--warn); animation: pulse 1.1s ease-in-out infinite; }
 .online-btn.error .dot { background: var(--danger); }
 .online-btn.off { color: var(--muted); }
 @keyframes pulse { 50% { opacity: .35; } }
@@ -803,10 +814,10 @@ a.list-row:hover {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 :root[data-view="signal"] .gauge.hot  { --gc: var(--danger); }
-:root[data-view="signal"] .gauge.warm { --gc: #d97706; }
+:root[data-view="signal"] .gauge.warm { --gc: var(--warn); }
 :root[data-view="signal"] .gauge.cool { --gc: var(--primary); }
 :root[data-view="signal"] .gauge.hot .n  { color: var(--danger); }
-:root[data-view="signal"] .gauge.warm .n { color: #d97706; }
+:root[data-view="signal"] .gauge.warm .n { color: var(--warn); }
 :root[data-view="signal"] .gauge.cool .n { color: var(--primary); }
 /* Beim Hover blendet der Ring aus, damit Minimieren/Schliessen Platz haben. */
 :root[data-view="signal"] .conv-tile:hover .gauge { opacity: 0; }
@@ -874,3 +885,206 @@ a.list-row:hover {
   display: grid; place-items: center;
 }
 .lightbox-close:hover { background: rgba(255, 255, 255, .26); }
+
+/* --- Design-Preset "Leitstand" ------------------------------------------- */
+/* Uebernimmt die Anmutung eines Schwesterprojekts: fast schwarzer
+   Grund, Hairline-Raster statt schwebender Karten, durchgehend monospace,
+   Farbe nur dort, wo sie Bedeutung traegt (gruen = zugestellt, amber =
+   ungelesen/Warnung, rot = Fehler, blau = eigene Nachricht/aktiv).
+   Reines Zusatz-Preset: ohne data-design="leitstand" aendert sich nichts.
+   Dark-only - die Vorlage kennt keinen Hellmodus; das Preset ueberschreibt
+   deshalb Modus- und Akzentwahl.
+
+   Der doppelte :root ist Absicht: die Akzent-Presets weiter oben tragen bis zu
+   drei Attribut-Selektoren (:root[data-theme][data-accent]). Ohne den
+   zusaetzlichen :root waere dieser Block schwaecher und die gewaehlte
+   Akzentfarbe wuerde das Preset stellenweise durchschlagen. */
+:root:root[data-design="leitstand"] {
+  --font: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --primary: #4da3ff;
+  --primary-hover: #6fb6ff;
+  --on-primary: #0b0e13;
+  --accent: #3fd68f;
+  --warn: #e8b93e;
+  --danger: #e05d5d;
+  --bg: #0b0e13;
+  --surface: #11161d;
+  --surface-2: #141a22;
+  --bubble-in: #141a22;
+  --bubble-out: #4da3ff;
+  --fg: #c9d4de;
+  --ink-soft: #a8b6c4;
+  --muted: #5c6b7a;
+  --border: #1d2530;
+  --shadow: none;
+  --shadow-hover: none;
+  --radius: 4px;
+  --radius-sm: 3px;
+  /* Monospace baut breiter; 15px haelt die Dichte der Vorlage. Wirkt als
+     rem-Basis auf die ganze Oberflaeche. */
+  font-size: 15px;
+  color-scheme: dark;
+}
+
+:root[data-design="leitstand"] body { font-size: 15px; }
+
+/* App-Bar: Wortmarke und Reiter als gesperrte Versalien wie die Kopfzeile der
+   Vorlage; Pillen werden zu Rechtecken. */
+:root[data-design="leitstand"] .brand {
+  font-size: 1rem; font-weight: 600; letter-spacing: .12em; text-transform: uppercase;
+}
+:root[data-design="leitstand"] .brand-mark { border-radius: 3px; }
+:root[data-design="leitstand"] .tab {
+  border-radius: 3px 3px 0 0; font-size: .74rem; font-weight: 600;
+  letter-spacing: .08em; text-transform: uppercase; padding: 7px 11px;
+}
+:root[data-design="leitstand"] .tab.active {
+  background: var(--surface-2); color: var(--fg); box-shadow: inset 0 -2px 0 var(--primary);
+}
+:root[data-design="leitstand"] .iconbtn,
+:root[data-design="leitstand"] .design-menu > summary,
+:root[data-design="leitstand"] .online-btn,
+:root[data-design="leitstand"] .logout-btn,
+:root[data-design="leitstand"] .conv-chip,
+:root[data-design="leitstand"] .design-mode,
+:root[data-design="leitstand"] .search-form input,
+:root[data-design="leitstand"] .newconv input[type=text],
+:root[data-design="leitstand"] .composer input[type=text] { border-radius: 3px; }
+:root[data-design="leitstand"] .online-btn .dot { border-radius: 2px; }
+
+/* Ueberschriften: die Vorlage fuehrt Titel als kleine gesperrte Versalien. */
+:root[data-design="leitstand"] .page-title {
+  font-size: .88rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
+}
+:root[data-design="leitstand"] .section-title,
+:root[data-design="leitstand"] .design-label,
+:root[data-design="leitstand"] .tray-label {
+  font-size: .66rem; font-weight: 600; letter-spacing: .13em;
+}
+
+/* Zeiten, Zaehler und Kennungen laufen in der Vorlage auf Ziffernbreite. */
+:root[data-design="leitstand"] .row-time,
+:root[data-design="leitstand"] .row-rel,
+:root[data-design="leitstand"] .row-jid,
+:root[data-design="leitstand"] .meta,
+:root[data-design="leitstand"] .pill,
+:root[data-design="leitstand"] .search-count { font-variant-numeric: tabular-nums; }
+:root[data-design="leitstand"] .row-time,
+:root[data-design="leitstand"] .row-rel { font-size: .7rem; letter-spacing: .04em; }
+/* Relative Zeit ist eine Angabe, kein Erfolg - im Leitstand nicht gruen. */
+:root[data-design="leitstand"] .row-rel { color: var(--muted); font-weight: 400; }
+
+/* Avatare: flaches Rundquadrat statt Farbverlauf-Kreis. Echte vCard-Fotos
+   bleiben unberuehrt (.av-img liegt darueber). */
+:root[data-design="leitstand"] .avatar,
+:root[data-design="leitstand"] .avatar.room {
+  width: 34px; height: 34px; border-radius: 3px;
+  background: var(--surface-2); border: 1px solid var(--border);
+  color: var(--muted); font-size: .74rem; font-weight: 600; letter-spacing: .04em;
+}
+:root[data-design="leitstand"] .conv-chip .avatar { width: 22px; height: 22px; font-size: .62rem; }
+
+/* Listen: 1px-Raster auf Linienfarbe statt schwebender Karten - die
+   Trennlinie IST der durchscheinende Hintergrund (Signatur der Vorlage). */
+:root[data-design="leitstand"] .list {
+  gap: 1px; background: var(--border); border: 1px solid var(--border);
+}
+:root[data-design="leitstand"] .list-row {
+  border: 0; border-radius: 0; box-shadow: none; background: var(--surface);
+}
+:root[data-design="leitstand"] a.list-row:hover {
+  transform: none; box-shadow: none; background: var(--surface-2);
+}
+:root[data-design="leitstand"] .conv-tile:hover { border-color: transparent; }
+/* Ungelesen: amber Kante - die einzige Farbe an einer sonst neutralen Zeile. */
+:root[data-design="leitstand"] .list-row.has-unread {
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+:root[data-design="leitstand"] .pill.unread { background: var(--warn); color: #0b0e13; border-radius: 2px; }
+:root[data-design="leitstand"] .pill.warn { border-radius: 2px; }
+:root[data-design="leitstand"] .push-badge {
+  border-radius: 2px; color: var(--on-primary); box-shadow: none;
+  width: 18px; height: 18px;
+}
+:root[data-design="leitstand"] .collapsed-tray,
+:root[data-design="leitstand"] .dev-card,
+:root[data-design="leitstand"] .login-card,
+:root[data-design="leitstand"] .design-panel { border-radius: 4px; box-shadow: none; }
+
+/* Raster/Signalfeld: dieselbe Hairline-Logik, keine Leuchteffekte.
+   Im Raster traegt der Container NICHT die Linienfarbe: die letzte Reihe ist
+   selten voll, und die leeren Zellen wuerden sonst als heller Block stehen
+   bleiben. Der Grund uebernimmt hier die Trennung (Kachel ist heller). */
+:root[data-design="leitstand"][data-view="grid"] .list { gap: 1px; background: var(--bg); }
+:root[data-design="leitstand"][data-view="grid"] #conv-list .list-row { border-radius: 0; }
+:root[data-design="leitstand"][data-view="grid"] #conv-list .list-row.has-unread {
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+:root[data-design="leitstand"][data-view="signal"] #conv-list .conv-tile,
+:root[data-design="leitstand"][data-view="signal"] #conv-list .conv-tile.is-push {
+  border-radius: 0; background: var(--surface); border: 1px solid var(--border);
+}
+:root[data-design="leitstand"][data-view="signal"] #conv-list .conv-tile.is-push {
+  box-shadow: inset 3px 0 0 var(--primary);
+}
+:root[data-design="leitstand"][data-view="signal"] #conv-list .conv-tile.is-push::after { display: none; }
+/* Ungelesen auch im Signalfeld als amber Kante - der Heat-Tint der Vorlage ist
+   ein Farbverlauf und entfaellt hier. */
+:root[data-design="leitstand"][data-view="signal"] #conv-list .conv-tile.has-unread {
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+/* Kein Anheben beim Ueberfahren - die Vorlage kennt keine schwebenden Karten. */
+:root[data-design="leitstand"][data-view="signal"] #conv-list .conv-tile:hover {
+  transform: none; box-shadow: none; background: var(--surface-2);
+}
+:root[data-design="leitstand"][data-view="signal"] #conv-list .conv-tile.has-unread:hover {
+  box-shadow: inset 3px 0 0 var(--warn);
+}
+/* Avatare bleiben auch in den grossen Bento-Kacheln flache Rundquadrate. */
+:root[data-design="leitstand"][data-view="signal"] #conv-list .avatar {
+  border-radius: 3px; background: var(--surface-2); color: var(--muted);
+}
+/* Der Ring-Gauge passt zur Vorlage (Messinstrument) und bleibt - nur seine
+   Innenflaeche muss der Kachelfarbe folgen, sonst steht ein heller Kreis darin. */
+:root[data-design="leitstand"][data-view="signal"] .gauge::before { background: var(--surface); }
+
+/* Nachrichten: die Vorlage kennt keine Sprechblasen. Kanten statt Rundungen,
+   eigene Nachricht als gefuellte Flaeche mit dunkler Schrift (wie ihr Knopf). */
+:root[data-design="leitstand"] .msg { border-radius: 3px; box-shadow: none; }
+:root[data-design="leitstand"] .row.in .msg { border-bottom-left-radius: 3px; }
+:root[data-design="leitstand"] .row.out .msg {
+  border-bottom-right-radius: 3px; color: var(--on-primary);
+}
+:root[data-design="leitstand"] .row.out .meta { color: rgba(11, 14, 19, .72); }
+:root[data-design="leitstand"] .row.out .meta .tick.delivered { color: #0b3a24; }
+:root[data-design="leitstand"] .row.out .msg-file { color: var(--on-primary); }
+:root[data-design="leitstand"] .msg .sender {
+  font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;
+}
+:root[data-design="leitstand"] .msg-img { border-radius: 2px; }
+:root[data-design="leitstand"] .msg-quote { border-radius: 2px; }
+/* Fehlgeschlagen ist ein Zustand, kein "eigene Nachricht": die gefuellte blaue
+   Flaeche wuerde die rote Signalfarbe der Meldung schlucken. Deshalb neutrale
+   Flaeche mit roter Kante - Rot bleibt eindeutig der Fehler. */
+:root[data-design="leitstand"] .row.pending.failed .msg {
+  background: var(--surface-2); color: var(--fg); border-color: var(--danger);
+}
+:root[data-design="leitstand"] .row.pending.failed .meta { color: var(--danger); }
+:root[data-design="leitstand"] .dev-trust { border-radius: 2px; letter-spacing: .06em; }
+
+/* Eingabe/Knoepfe: rechteckig, Senden als gefuellter Block mit dunkler Schrift. */
+:root[data-design="leitstand"] .icon-btn {
+  border-radius: 3px; width: 42px; height: 42px;
+}
+:root[data-design="leitstand"] .tile-compose input { border-radius: 3px; }
+:root[data-design="leitstand"] .tile-compose button { border-radius: 3px; }
+:root[data-design="leitstand"] .tile-actions button { border-radius: 2px; }
+:root[data-design="leitstand"] .btn { border-radius: 3px; font-weight: 600; letter-spacing: .04em; }
+:root[data-design="leitstand"] .swatch { border-radius: 3px; }
+:root[data-design="leitstand"] .drop-box { border-radius: 4px; }
+:root[data-design="leitstand"] :focus-visible { border-radius: 0; outline-offset: 1px; }
+
+/* Modus und Akzentfarbe sind im Leitstand ohne Wirkung (dark-only, feste
+   Palette) - die Schalter werden ausgeblendet statt wirkungslos anzubieten. */
+:root[data-design="leitstand"] [data-standard-only] { display: none; }
+

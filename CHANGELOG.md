@@ -3,6 +3,37 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.10.1] - 2026-08-08
+- New brand mark: a speech bubble with a terminal prompt and a blinking cursor
+  (line art instead of the filled blue tile). The old tile was the only round,
+  filled element among all the hairlines in the "Leitstand" preset. Used in both
+  design presets and on the login page — one wordmark should not carry two
+  different marks. The cursor honours `prefers-reduced-motion`.
+- The PWA/home-screen icons (`icon-180/192/512.png`) still show the old mark; they
+  are PNGs and would have to be regenerated separately.
+
+## [1.10.0] - 2026-08-08
+- New design preset "Leitstand" (gear → Design), adopting the look of a sister
+  project: near-black background (#0b0e13), a hairline grid instead of floating
+  cards (no shadows, 3–4px radius), monospace throughout, small letter-spaced caps
+  as labels, tabular figures for all times and counters. Colour only carries
+  meaning: green = delivered, amber = unread, red = error, blue = own message or
+  active. Bubbles become edges; your own message is a filled blue block with dark
+  text. The preset is dark-only (the model has no light mode) — the mode and accent
+  pickers are hidden inside it because they would have no effect.
+- The standard design is unchanged; without switching, nothing changes. The choice
+  lives in the browser (localStorage) like the other design settings and is applied
+  before first paint (no flash of the wrong theme).
+- Grid and signal-field views follow the preset: heat tint and gradient frames are
+  dropped, unread tiles carry the amber edge instead, and there is no hover lift.
+  The ring gauge stays — as an instrument it fits the model. In grid view the
+  container does not carry the line colour, otherwise the empty cells of the last
+  row would remain as a bright block.
+- Cleanup: font family (`--font`) and warning colour (`--warn`) are now tokens. The
+  warning colour was hardcoded in four places (`#f59e0b`/`#d97706` for the trust
+  warning, the connecting state and the gauge) and was therefore never adapted for
+  dark mode.
+
 ## [1.9.0] - 2026-07-10
 - Contact avatars: the daemon fetches contacts' vCard photos (XEP-0153/0054) and
   stores them per account. The web UI shows them in the chat list instead of the

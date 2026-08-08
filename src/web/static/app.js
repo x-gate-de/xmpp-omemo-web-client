@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben
-// Version: 1.10.0
+// Version: 1.11.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -461,9 +461,10 @@
   // Wird gesetzt, sobald eine Konversationsliste auf der Seite ist (fuer Re-Render bei Sortwechsel).
   var listRefresh = null;
 
-  // Design-Umschalter (Modus, Akzentfarbe, Ansicht, Spalten, Sortierung): sofort anwenden + merken.
-  var DESIGN_KEYS = ["theme", "accent", "view", "cols", "sort", "lines", "density"];
-  var DESIGN_DEFAULT = { theme: "auto", accent: "blue", view: "list", cols: "auto", sort: "activity", lines: "4", density: "comfortable" };
+  // Design-Umschalter (Preset, Modus, Akzentfarbe, Ansicht, Spalten, Sortierung):
+  // sofort anwenden + merken.
+  var DESIGN_KEYS = ["design", "theme", "accent", "view", "cols", "sort", "lines", "density"];
+  var DESIGN_DEFAULT = { design: "app", theme: "auto", accent: "blue", view: "list", cols: "auto", sort: "activity", lines: "4", density: "comfortable" };
   function applyDesign(key, val) {
     document.documentElement.setAttribute("data-" + key, val);
     try { localStorage.setItem(key, val); } catch (e) {}

@@ -36,6 +36,10 @@ message the moment it arrives and stores it centrally. That is what this project
   [XEP-0184](https://xmpp.org/extensions/xep-0184.html) receipts / error).
 - **Public group chats (MUC)**: discover, join, read and post (cleartext; no OMEMO
   in MUC, by design).
+- **Design presets** (gear → Design): "Standard" (light/dark, six accent colours)
+  and "Leitstand" — a dark, hairline, monospace look in which colour only carries
+  meaning. Dark-only, so the mode and accent pickers are hidden in it. The choice
+  lives in the browser, not on the account.
 - No build step, CSP-friendly UI (no external CDNs, no inline scripts), dark mode.
 
 ## Security model & honest limitations

@@ -17,7 +17,14 @@
 <body class="login-body">
   <div class="login-card">
     <div class="login-brand">
-      <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5z"/></svg>
+      {# Gleiches Markenzeichen wie in der App-Bar - die Wortmarke "Chat" soll
+         nicht auf zwei verschiedenen Seiten zwei verschiedene Zeichen tragen. #}
+      <svg class="brand-mark" viewBox="0 0 28 28" width="26" height="26" fill="none"
+           stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3.2 6.2a2.4 2.4 0 0 1 2.4-2.4h16.8a2.4 2.4 0 0 1 2.4 2.4v10.4a2.4 2.4 0 0 1-2.4 2.4H11.6L6.6 23v-4h-1a2.4 2.4 0 0 1-2.4-2.4z"/>
+        <path d="M8.4 9.4l2.6 2.2-2.6 2.2"/>
+        <rect class="brand-caret" x="13.4" y="12.6" width="5.4" height="1.9" rx=".3" fill="currentColor" stroke="none"/>
+      </svg>
       <span>Chat</span>
     </div>
 

@@ -19,9 +19,14 @@
 <header class="appbar">
   <div class="appbar-inner">
     <a class="brand" href="/" aria-label="Chat Startseite">
-      <svg class="brand-mark" viewBox="0 0 28 28" width="26" height="26" aria-hidden="true">
-        <rect width="28" height="28" rx="7" fill="currentColor"/>
-        <path d="M7.5 9.2A1.7 1.7 0 0 1 9.2 7.5h9.6a1.7 1.7 0 0 1 1.7 1.7v6a1.7 1.7 0 0 1-1.7 1.7h-5.3l-3.9 3.2V16.9H9.2A1.7 1.7 0 0 1 7.5 15.2z" fill="#fff"/>
+      {# Markenzeichen: Sprechblase mit Terminal-Prompt und blinkendem Cursor -
+         Chat als mitlaufendes Log. Strichzeichnung statt gefuellter Kachel,
+         damit es auf hellem wie dunklem Grund und in beiden Design-Presets traegt. #}
+      <svg class="brand-mark" viewBox="0 0 28 28" width="26" height="26" fill="none"
+           stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M3.2 6.2a2.4 2.4 0 0 1 2.4-2.4h16.8a2.4 2.4 0 0 1 2.4 2.4v10.4a2.4 2.4 0 0 1-2.4 2.4H11.6L6.6 23v-4h-1a2.4 2.4 0 0 1-2.4-2.4z"/>
+        <path d="M8.4 9.4l2.6 2.2-2.6 2.2"/>
+        <rect class="brand-caret" x="13.4" y="12.6" width="5.4" height="1.9" rx=".3" fill="currentColor" stroke="none"/>
       </svg>
       <span>Chat</span>
     </a>
@@ -48,6 +53,13 @@
       </summary>
       <div class="design-panel">
         <div class="design-row">
+          <span class="design-label">Design</span>
+          <div class="design-opts">
+            <button type="button" class="design-mode" data-design-set="app">Standard</button>
+            <button type="button" class="design-mode" data-design-set="leitstand">Leitstand</button>
+          </div>
+        </div>
+        <div class="design-row" data-standard-only>
           <span class="design-label">Modus</span>
           <div class="design-opts">
             <button type="button" class="design-mode" data-theme-set="auto">Auto</button>
@@ -55,7 +67,7 @@
             <button type="button" class="design-mode" data-theme-set="dark">Dunkel</button>
           </div>
         </div>
-        <div class="design-row">
+        <div class="design-row" data-standard-only>
           <span class="design-label">Farbe</span>
           <div class="design-opts">
             <button type="button" class="swatch" data-accent-set="blue" style="--sw:#2563eb" title="Blau" aria-label="Blau"></button>

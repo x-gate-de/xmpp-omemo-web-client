@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/theme.js
 // Autor: Torben
-// Version: 1.1.0
+// Version: 1.2.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Setzt die gespeicherten Design-Einstellungen (Modus, Akzentfarbe, Ansicht,
@@ -10,7 +10,7 @@
 
 (function () {
   try {
-    var keys = ["theme", "accent", "view", "cols", "sort", "lines", "density"];
+    var keys = ["theme", "accent", "view", "cols", "sort", "lines", "density", "design"];
     for (var i = 0; i < keys.length; i++) {
       var v = localStorage.getItem(keys[i]);
       if (v) document.documentElement.setAttribute("data-" + keys[i], v);
