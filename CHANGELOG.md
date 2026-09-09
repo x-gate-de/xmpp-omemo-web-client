@@ -3,6 +3,45 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.11.1] - 2026-09-09
+- The name the daemon reports in software version replies
+  ([XEP-0092](https://xmpp.org/extensions/xep-0092.html)) is now
+  "xmpp-omemo-web-client" — that is what contacts see in the device list of an
+  acknowledged message. The version number stays part of the reply; the operating
+  system is deliberately left out.
+
+## [1.11.0] - 2026-09-08
+- Delivery status now shows **who** acknowledged: the daemon stores the full JID of
+  the acknowledging device for every delivery receipt
+  ([XEP-0184](https://xmpp.org/extensions/xep-0184.html)). Previously only a status
+  flag was set and the origin of the receipt was thrown away — yet that origin is
+  exactly what answers the question of where a message actually arrived. Since OMEMO
+  encrypts per device, several of the recipient's devices can acknowledge the same
+  message; each receipt is recorded separately (new table `receipts`).
+- Clicking the two ticks expands the device list below the bubble: client and
+  version, platform, resource and time per acknowledgement. With more than one
+  device the count sits next to the ticks; the tooltip carries the same for a mouse.
+- Client identification per resource: passive, from the entity capabilities
+  ([XEP-0115](https://xmpp.org/extensions/xep-0115.html)) in presence, plus a single
+  software version query ([XEP-0092](https://xmpp.org/extensions/xep-0092.html)) per
+  unknown resource (new table `client_info`). If a client does not answer, its
+  resource remains the display name — most clients name it after themselves. The
+  daemon answers version queries itself with product name and version, but without
+  the operating system: nobody outside needs to know that.
+- Delivery receipts are now also picked up from carbon copies, and outgoing messages
+  from the user's own other devices are archived with their message ID. Only then can
+  receipts be matched to messages sent from a phone or office client.
+- The ticks are updated by polling. Before, the status was only read at render time:
+  an acknowledgement arriving after the chat was opened showed up only after a page
+  reload.
+- Client identification skips group chats: a MUC occupant JID can never be an
+  acknowledging device, and without that guard every reconnect would fire a version
+  query at every occupant of every joined room.
+- The product version now lives in `src/__init__.py` only (daemon and web UI read it
+  from there).
+- Unchanged caveat: two ticks mean received, not read — chat markers
+  ([XEP-0333](https://xmpp.org/extensions/xep-0333.html)) are not evaluated.
+
 ## [1.10.1] - 2026-08-08
 - New brand mark: a speech bubble with a terminal prompt and a blinking cursor
   (line art instead of the filled blue tile). The old tile was the only round,

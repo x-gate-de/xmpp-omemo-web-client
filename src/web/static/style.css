@@ -275,6 +275,25 @@ a.list-row:hover {
 .row.out .meta { color: rgba(255, 255, 255, .8); }
 .meta .tick { width: 15px; height: 15px; flex: none; }
 .meta .tick.delivered { color: #a7f3d0; }
+/* Zustellanzeige: die zwei Haken sind anklickbar und klappen die Liste der
+   Geraete auf, die die Nachricht quittiert haben (XEP-0184). Der Tooltip zeigt
+   dasselbe -- er ist auf Touch-Geraeten aber nicht erreichbar. */
+.tickbtn {
+  display: inline-flex; align-items: center; gap: 2px; padding: 0; margin: 0;
+  border: 0; background: none; color: inherit; font: inherit; line-height: 1; cursor: pointer;
+}
+.tickbtn .tickn { font-size: 0.62rem; font-weight: 700; color: #a7f3d0; font-variant-numeric: tabular-nums; }
+.receipts {
+  display: flex; flex-direction: column; gap: 4px;
+  margin-top: 5px; padding-top: 5px; font-size: 0.68rem;
+  border-top: 1px solid rgba(255, 255, 255, .28);
+}
+/* display: flex wuerde das hidden-Attribut aushebeln -- die Liste startet zu. */
+.receipts[hidden] { display: none; }
+.receipts-head { text-transform: uppercase; letter-spacing: .08em; opacity: .72; }
+.receipt { display: flex; flex-direction: column; }
+.receipt .rc-who { font-weight: 600; }
+.receipt .rc-sub { opacity: .72; overflow-wrap: anywhere; }
 .row.pending .msg { opacity: .62; }
 .row.pending.failed .msg { opacity: 1; border: 1px solid color-mix(in srgb, var(--danger) 55%, var(--border)); }
 .row.pending.failed .meta { color: var(--danger); }
@@ -1057,6 +1076,10 @@ a.list-row:hover {
 }
 :root[data-design="leitstand"] .row.out .meta { color: rgba(11, 14, 19, .72); }
 :root[data-design="leitstand"] .row.out .meta .tick.delivered { color: #0b3a24; }
+:root[data-design="leitstand"] .row.out .tickbtn .tickn { color: #0b3a24; }
+:root[data-design="leitstand"] .row.out .receipts {
+  border-top-color: rgba(11, 14, 19, .28); color: rgba(11, 14, 19, .82);
+}
 :root[data-design="leitstand"] .row.out .msg-file { color: var(--on-primary); }
 :root[data-design="leitstand"] .msg .sender {
   font-size: .68rem; letter-spacing: .1em; text-transform: uppercase;

@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/archive.py
 # Autor: Torben
-# Version: 1.3.0
+# Version: 1.4.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Schreibseite des Daemons: Archiv, Outbox, Kontakte (Roster) und MUC-Raeume.
@@ -122,6 +122,46 @@ class MessageArchive:
         self._conn.execute(
             "UPDATE messages SET status = 'delivered' WHERE msg_id = ? AND direction = 'out'",
             (msg_id,),
+        )
+        self._conn.commit()
+
+    # --- Empfangsbestaetigungen / Geraete ------------------------------------
+
+    # Haelt fest, welches Geraet (volle JID) eine Nachricht bestaetigt hat. Mehrere
+    # Geraete des Empfaengers koennen dieselbe Nachricht bestaetigen -> je eine Zeile.
+    # Rueckgabe: True, wenn die Bestaetigung neu war.
+    def add_receipt(self, msg_id, from_jid, resource, ts=None):
+        try:
+            self._conn.execute(
+                "INSERT INTO receipts (msg_id, from_jid, resource, ts) VALUES (?, ?, ?, ?)",
+                (msg_id, from_jid, resource or "", ts if ts is not None else time.time()),
+            )
+            self._conn.commit()
+            return True
+        except sqlite3.IntegrityError:
+            return False
+
+    # Gespeicherte Client-Kennung einer vollen JID (oder None).
+    def client_info(self, full_jid):
+        row = self._conn.execute(
+            "SELECT name, version, os, node, source FROM client_info WHERE full_jid = ?",
+            (full_jid,),
+        ).fetchone()
+        if not row:
+            return None
+        return {"name": row[0], "version": row[1], "os": row[2], "node": row[3], "source": row[4]}
+
+    # Speichert die erkannte Client-Software einer vollen JID. Eine Version-Abfrage
+    # (XEP-0092) ist aussagekraeftiger als der Caps-Node und darf ihn ueberschreiben;
+    # umgekehrt nicht, damit eine spaetere Presence die genauere Angabe nicht verdraengt.
+    def store_client_info(self, full_jid, name, version, os_name, node, source):
+        existing = self.client_info(full_jid)
+        if existing and existing.get("source") == "version" and source != "version":
+            return
+        self._conn.execute(
+            "INSERT OR REPLACE INTO client_info "
+            "(full_jid, name, version, os, node, source, updated_ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (full_jid, name or "", version or "", os_name or "", node or "", source, time.time()),
         )
         self._conn.commit()
 

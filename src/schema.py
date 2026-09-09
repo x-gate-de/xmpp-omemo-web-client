@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/schema.py
 # Autor: Torben
-# Version: 1.2.0
+# Version: 1.3.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Zentrales SQLite-Schema fuer Archiv, Outbox, Read-State, Kontakte und MUC.
@@ -133,6 +133,35 @@ def ensure_schema(conn):
         "  name TEXT,"
         "  nick TEXT,"
         "  joined INTEGER NOT NULL DEFAULT 1"
+        ")"
+    )
+
+    # Empfangsbestaetigungen (XEP-0184) je gesendeter Nachricht. Eine Nachricht kann
+    # von mehreren Geraeten des Empfaengers bestaetigt werden -> eine Zeile pro Geraet.
+    # Schluessel ist die XMPP-Message-ID (messages.msg_id), nicht die lokale id.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS receipts ("
+        "  msg_id TEXT NOT NULL,"          # XMPP-Message-ID der bestaetigten Nachricht
+        "  from_jid TEXT NOT NULL,"        # volle JID des bestaetigenden Geraets
+        "  resource TEXT,"                 # Ressourcenteil (Client-Kennung des Geraets)
+        "  ts REAL NOT NULL,"
+        "  PRIMARY KEY (msg_id, from_jid)"
+        ")"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_receipts_msg ON receipts (msg_id)")
+
+    # Erkannte Client-Software je voller JID (Ressource). Quelle: Entity Capabilities
+    # (XEP-0115, passiv aus der Presence) und Software Version (XEP-0092, einmalige
+    # Abfrage). Dient nur der Anzeige, welches Geraet eine Nachricht bestaetigt hat.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS client_info ("
+        "  full_jid TEXT PRIMARY KEY,"
+        "  name TEXT,"                     # Produktname, z. B. "Conversations"
+        "  version TEXT,"
+        "  os TEXT,"
+        "  node TEXT,"                     # Caps-Node (Hersteller-URL)
+        "  source TEXT,"                   # 'caps' | 'version'
+        "  updated_ts REAL"
         ")"
     )
 

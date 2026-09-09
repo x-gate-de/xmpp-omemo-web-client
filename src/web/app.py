@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben
-# Version: 2.12.1
+# Version: 2.13.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -32,6 +32,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Resp
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
 
+from src import APP_VERSION
 from src.accounts import AccountRegistry
 from src.config import load_config
 from src.schema import ensure_schema
@@ -67,8 +68,8 @@ def _asset_version():
 
 _env.globals["asset_ver"] = _asset_version()
 
-# Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog).
-APP_VERSION = "1.10.1"
+# Produktversion (Anzeige im Design-Menue, verlinkt auf den oeffentlichen Changelog);
+# gepflegt in src/__init__.py, damit Daemon und Web-UI dieselbe Angabe fuehren.
 CHANGELOG_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/CHANGELOG.md"
 HELP_URL = "https://github.com/x-gate-de/xmpp-omemo-web-client/blob/main/ANLEITUNG.md"
 _env.globals["app_version"] = APP_VERSION
@@ -446,16 +447,60 @@ def _split_quote(body):
     return "\n".join(qlines), "\n".join(lines[i:]).lstrip("\n")
 
 
-def _msg_dict(r):
+# Anzeigename eines bestaetigenden Geraets: Produktname (mit Version, falls
+# bekannt), sonst die Ressource -- die die meisten Clients nach sich selbst benennen.
+def _client_label(name, version, resource):
+    if name:
+        return (name + " " + version).strip() if version else name
+    return resource or "unbekanntes Geraet"
+
+
+# Empfangsbestaetigungen (XEP-0184) zu den uebergebenen XMPP-Message-IDs, je ID eine
+# Liste der bestaetigenden Geraete. Die Client-Kennung kommt aus client_info (vom
+# Daemon per Caps/Version ermittelt) und fehlt, solange sie nicht aufgeloest wurde.
+def _receipts_map(conn, msg_ids):
+    ids = [m for m in dict.fromkeys(msg_ids) if m]
+    if not ids:
+        return {}
+    try:
+        rows = conn.execute(
+            "SELECT r.msg_id, r.from_jid, r.resource, r.ts, c.name, c.version, c.os "
+            "FROM receipts r LEFT JOIN client_info c ON c.full_jid = r.from_jid "
+            "WHERE r.msg_id IN (" + ",".join("?" * len(ids)) + ") ORDER BY r.ts ASC",
+            ids,
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # Alte Archiv-DB ohne die Tabellen (erst ab Daemon-Neustart vorhanden).
+        return {}
+    out = {}
+    for r in rows:
+        out.setdefault(r["msg_id"], []).append({
+            "who": _client_label(r["name"], r["version"], r["resource"]),
+            "os": r["os"] or "", "resource": r["resource"] or "",
+            "jid": r["from_jid"], "ts": _fmt_ts(r["ts"]),
+        })
+    return out
+
+
+def _msg_dict(r, receipts=None):
     quote, text = _split_quote(r["body"])
     media = _media_info(r["body"], r["id"]) if r["decrypted"] else None
     if media:
         # Anhang ersetzt den (sonst als Rohtext sichtbaren) aesgcm-Link.
         quote, text = None, ""
+    rec = receipts or []
     return {"id": r["id"], "direction": r["direction"], "body": r["body"],
             "quote": quote, "text": text, "media": media,
             "decrypted": bool(r["decrypted"]), "ts": _fmt_ts(r["ts_received"]),
-            "ts_raw": r["ts_received"], "sender": r["sender"], "status": r["status"]}
+            "ts_raw": r["ts_received"], "sender": r["sender"], "status": r["status"],
+            # Zugestellt ist, was der Empfaenger quittiert hat; der alte Status bleibt
+            # als Rueckfall fuer Nachrichten aus der Zeit vor der Geraete-Erfassung.
+            "delivered": bool(rec) or r["status"] == "delivered", "receipts": rec}
+
+
+# Sammelt die Bestaetigungen zu den ausgehenden Zeilen eines Ergebnissatzes.
+def _receipts_for_rows(conn, rows):
+    return _receipts_map(conn, [r["msg_id"] for r in rows if r["direction"] == "out"])
 
 
 # Inkrementell: neue Nachrichten nach einer id (Live-Aktualisierung).
@@ -463,13 +508,14 @@ def _messages(db_path, partner, after_id=0):
     conn = _open_ro(db_path)
     try:
         rows = conn.execute(
-            "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
+            "SELECT id, direction, body, decrypted, ts_received, sender, status, msg_id FROM messages "
             "WHERE partner_jid = ? AND id > ? AND " + _nonempty() + " ORDER BY id ASC",
             (partner, after_id),
         ).fetchall()
+        rmap = _receipts_for_rows(conn, rows)
     finally:
         conn.close()
-    return [_msg_dict(r) for r in rows]
+    return [_msg_dict(r, rmap.get(r["msg_id"])) for r in rows]
 
 
 # Seitenweises Laden (Keyset nach (ts, id)): die letzte Seite oder aeltere davor.
@@ -479,21 +525,44 @@ def _messages_page(db_path, partner, before_ts=None, before_id=None, limit=50):
     try:
         if before_ts is None:
             rows = conn.execute(
-                "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
+                "SELECT id, direction, body, decrypted, ts_received, sender, status, msg_id FROM messages "
                 "WHERE partner_jid = ? AND " + _nonempty() + " ORDER BY ts_received DESC, id DESC LIMIT ?",
                 (partner, limit),
             ).fetchall()
         else:
             rows = conn.execute(
-                "SELECT id, direction, body, decrypted, ts_received, sender, status FROM messages "
+                "SELECT id, direction, body, decrypted, ts_received, sender, status, msg_id FROM messages "
                 "WHERE partner_jid = ? AND (ts_received < ? OR (ts_received = ? AND id < ?)) "
                 "AND " + _nonempty() + " ORDER BY ts_received DESC, id DESC LIMIT ?",
                 (partner, before_ts, before_ts, before_id, limit),
             ).fetchall()
+        rmap = _receipts_for_rows(conn, rows)
     finally:
         conn.close()
     has_more = len(rows) == limit
-    return [_msg_dict(r) for r in reversed(rows)], has_more
+    return [_msg_dict(r, rmap.get(r["msg_id"])) for r in reversed(rows)], has_more
+
+
+# Zustellstand der zuletzt gesendeten Nachrichten (Kartierung lokale id ->
+# bestaetigende Geraete). Noetig fuer die Live-Aktualisierung: Bestaetigungen treffen
+# erst nach dem Rendern ein, das Polling liefert aber nur neue Nachrichten.
+def _delivery(db_path, partner, limit=60):
+    conn = _open_ro(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT id, msg_id FROM messages WHERE partner_jid = ? AND direction = 'out' "
+            "AND msg_id IS NOT NULL AND msg_id <> '' ORDER BY id DESC LIMIT ?",
+            (partner, limit),
+        ).fetchall()
+        rmap = _receipts_map(conn, [r["msg_id"] for r in rows])
+    finally:
+        conn.close()
+    out = {}
+    for r in rows:
+        rec = rmap.get(r["msg_id"])
+        if rec:
+            out[str(r["id"])] = rec
+    return out
 
 
 def _pending(db_path, partner):
@@ -969,7 +1038,8 @@ def api_messages(partner: str, after_id: int = 0, acc: dict = Depends(require_ac
     msgs = _messages(db_path, partner, after_id)
     if msgs:
         _mark_read(db_path, partner)
-    return {"messages": msgs, "pending": _pending(db_path, partner)}
+    return {"messages": msgs, "pending": _pending(db_path, partner),
+            "delivery": _delivery(db_path, partner)}
 
 
 def _account_domain(jid):

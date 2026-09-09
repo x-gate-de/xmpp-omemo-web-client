@@ -67,6 +67,11 @@ Auf der Startseite siehst du deine Gespräche als Kacheln:
 - Der Status einer gesendeten Nachricht: **wird gesendet → gesendet → zugestellt**
   (Häkchen). Schlägt etwas fehl, erscheint eine rote **Fehler**‑Blase, die du mit
   dem **×** verwerfen kannst.
+- **Ein Haken** heißt: an den Server übergeben. **Zwei Haken** heißt: ein Gerät der
+  Gegenseite hat den Empfang quittiert. Tippe auf die Haken, dann siehst du, welche
+  Geräte quittiert haben (Client, Version, Plattform und Uhrzeit) — steht eine Zahl
+  neben den Haken, waren es mehrere. Quittiert bedeutet **empfangen, nicht gelesen**;
+  eine Lesebestätigung gibt es nicht.
 
 > Verschlüsseltes Senden geht nur an Empfänger mit OMEMO‑fähigem Gerät. Hat die
 > Gegenseite kein solches Gerät, meldet die App „Empfänger hat kein vertrautes

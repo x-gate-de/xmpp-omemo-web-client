@@ -1,5 +1,41 @@
 {% extends "base.html" %}
 {% block title %}{{ name }} - Chat{% endblock %}
+
+{# Zustellanzeige einer eigenen Nachricht: ein Haken = gesendet, zwei = vom Client
+   des Empfaengers quittiert (XEP-0184). Die Quittungen nennen das bestaetigende
+   Geraet; mehrere Geraete koennen dieselbe Nachricht quittieren. #}
+{% macro delivery(m) -%}
+{%- if m.delivered -%}
+{%- set lines = [] -%}
+{%- for r in m.receipts -%}
+{%- set _ = lines.append(r.who + (" (" + r.os + ")" if r.os else "") + " - " + r.ts) -%}
+{%- endfor -%}
+{#- Zeilenumbrueche im title erzeugen mehrzeilige Tooltips; als Variable, weil eine
+    HTML-Entitaet im Ausdruck vom Autoescaping zerlegt wuerde. -#}
+{%- set tip = ("Zugestellt an:\n" + lines|join("\n")) if lines else "Zugestellt (bestaetigendes Geraet unbekannt)" -%}
+<button type="button" class="tickbtn" aria-label="Zustellung anzeigen" title="{{ tip }}">
+  <svg class="tick delivered" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 13l4 4L13 7"/><path d="M11 13l4 4L23 7"/></svg>
+  {%- if m.receipts|length > 1 %}<span class="tickn">{{ m.receipts|length }}</span>{% endif -%}
+</button>
+{%- else -%}
+<svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro receipts(m) -%}
+{%- if m.receipts -%}
+<div class="receipts" hidden>
+  <div class="receipts-head">Quittiert von {{ m.receipts|length }} Geraet{% if m.receipts|length > 1 %}en{% endif %}</div>
+  {%- for r in m.receipts %}
+  <div class="receipt">
+    <span class="rc-who">{{ r.who }}{% if r.os %} &middot; {{ r.os }}{% endif %}</span>
+    <span class="rc-sub">{{ r.resource or r.jid }} &middot; {{ r.ts }}</span>
+  </div>
+  {%- endfor %}
+</div>
+{%- endif -%}
+{%- endmacro %}
+
 {% block content %}
 <div class="conv-head">
   <span class="avatar {% if is_room %}room{% endif %}" style="--h: {{ hue }}">{{ initials }}{% if has_avatar %}<img class="av-img" src="/avatar/{{ partner }}?v={{ avatar_ver }}" alt="" loading="lazy">{% endif %}</span>
@@ -35,21 +71,16 @@
 
 <div class="thread" id="messages" data-partner="{{ partner }}" data-last-id="{{ max_id }}">
   {% for m in messages %}
-    <div class="row {{ m.direction }}" data-id="{{ m.id }}" data-ts="{{ m.ts }}">
+    <div class="row {{ m.direction }}" data-id="{{ m.id }}" data-ts="{{ m.ts }}"{% if m.direction == 'out' %} data-rc="{{ m.receipts|length }}"{% endif %}>
       <div class="msg">
         {% if m.sender and m.direction == 'in' %}<span class="sender">{{ m.sender }}</span>{% endif %}
         {% if m.decrypted %}{% if m.media %}{% if m.media.kind == 'image' %}<a class="msg-media" href="{{ m.media.url }}" target="_blank" rel="noopener"><img class="msg-img" src="{{ m.media.url }}" loading="lazy" alt="{{ m.media.name }}"></a>{% else %}<a class="msg-file" href="{{ m.media.url }}" target="_blank" rel="noopener">Anhang: {{ m.media.name }}</a>{% endif %}{% else %}{% if m.quote %}<span class="msg-quote">{{ m.quote }}</span>{% endif %}<span class="msg-text">{{ m.text }}</span>{% endif %}{% else %}<span class="undec">[nicht entschluesselbar]</span>{% endif %}
         {% if m.decrypted and m.text %}<button type="button" class="reply-btn" data-quote="{{ m.text }}" data-who="{% if m.sender %}{{ m.sender }}{% elif m.direction == 'out' %}Du{% else %}{{ name }}{% endif %}" title="Antworten" aria-label="Antworten"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></button>{% endif %}
         <span class="meta">
           <span>{{ m.ts }}</span>
-          {% if m.direction == 'out' %}
-            {% if m.status == 'delivered' %}
-              <svg class="tick delivered" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 13l4 4L13 7"/><path d="M11 13l4 4L23 7"/></svg>
-            {% else %}
-              <svg class="tick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l5 5L20 6"/></svg>
-            {% endif %}
-          {% endif %}
+          {% if m.direction == 'out' %}{{ delivery(m) }}{% endif %}
         </span>
+        {% if m.direction == 'out' %}{{ receipts(m) }}{% endif %}
       </div>
     </div>
   {% endfor %}

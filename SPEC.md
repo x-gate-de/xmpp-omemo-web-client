@@ -100,6 +100,17 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
 - Ausgehende 1:1-Nachrichten zeigen den Status: "wird gesendet" (Outbox offen),
   "gesendet" (versendet), "Fehler" (Verschluesselung/Sendung fehlgeschlagen),
   "zugestellt" (Empfangsbestaetigung XEP-0184 vom Empfaenger erhalten).
+- Der Daemon speichert zu jeder Empfangsbestaetigung die volle JID des quittierenden
+  Geraets (Tabelle `receipts`). Eine Nachricht kann von mehreren Geraeten des
+  Empfaengers quittiert werden; jede Quittung wird einzeln festgehalten.
+- Die Web-UI zeigt an den zwei Haken die Anzahl der quittierenden Geraete und klappt
+  auf Klick die Liste auf: erkannter Client, Version, Plattform, Ressource, Zeitpunkt.
+  Bestaetigungen, die nach dem Rendern eintreffen, werden per Polling nachgetragen.
+- Die Client-Erkennung nutzt Entity Capabilities (XEP-0115, passiv aus der Presence)
+  und einmalig Software Version (XEP-0092) je unbekannter Ressource; ohne Antwort
+  bleibt die Ressource selbst der Anzeigename. "Zugestellt" bedeutet: ein Client hat
+  den Empfang quittiert — nicht, dass die Nachricht gelesen wurde (XEP-0333 wird nicht
+  ausgewertet).
 
 ### F10 — Kontaktliste (Roster)
 - Der Daemon persistiert das Roster (contacts). Die Web-UI zeigt die Kontakte mit

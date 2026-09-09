@@ -34,6 +34,14 @@ message the moment it arrives and stores it centrally. That is what this project
   markers, contact list from the roster — per user, isolated.
 - **Send** encrypted 1:1 messages with status (sent / delivered via
   [XEP-0184](https://xmpp.org/extensions/xep-0184.html) receipts / error).
+- **Delivery detail**: one tick means handed to the server, two ticks mean a client
+  on the other side acknowledged receipt. Click the ticks to see *which* devices
+  acknowledged — client, version, platform, resource and time; the count next to the
+  ticks shows how many. Clients are identified passively from entity capabilities
+  ([XEP-0115](https://xmpp.org/extensions/xep-0115.html)) plus a single software
+  version query ([XEP-0092](https://xmpp.org/extensions/xep-0092.html)) per unknown
+  resource. Acknowledged means received, not read — chat markers
+  ([XEP-0333](https://xmpp.org/extensions/xep-0333.html)) are not evaluated.
 - **Public group chats (MUC)**: discover, join, read and post (cleartext; no OMEMO
   in MUC, by design).
 - **Design presets** (gear → Design): "Standard" (light/dark, six accent colours)

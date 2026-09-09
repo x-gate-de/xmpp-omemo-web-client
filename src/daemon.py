@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben
-# Version: 1.7.0
+# Version: 1.8.3
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -10,7 +10,8 @@
 # Ablauf:
 # - Anmeldung; Roster persistieren; MUC-Dienste/Raeume entdecken; beigetretene
 #   Raeume betreten; Carbons aktivieren; eingehende Nachrichten archivieren;
-#   Empfangsbestaetigungen (XEP-0184) auswerten; Outbox abarbeiten.
+#   Empfangsbestaetigungen (XEP-0184) samt bestaetigendem Geraet auswerten;
+#   Client-Software der Gegenstellen erkennen (XEP-0115/0092); Outbox abarbeiten.
 # Betriebs- und Wartungshinweise:
 # - Entschluesselung sofort beim Empfang (Forward Secrecy).
 # - Trust-Politik fuer den unbeaufsichtigten Archivierer: TOAKAFA.
@@ -42,6 +43,7 @@ from slixmpp import ClientXMPP, JID
 from slixmpp.plugins import register_plugin
 from slixmpp_omemo import TrustLevel, XEP_0384
 
+from . import APP_VERSION
 from .archive import MessageArchive
 from .omemo_storage import SqliteOmemoStorage
 
@@ -55,6 +57,19 @@ def _human_send_error(exc):
     if name == "NoEligibleDevices":
         return "Empfaenger hat kein vertrautes OMEMO-Geraet (verschluesselt nicht moeglich)"
     return name
+
+
+# Leitet aus dem Caps-Node (XEP-0115, meist die Hersteller-URL wie
+# "https://conversations.im") einen anzeigbaren Produktnamen ab. Nur Fallback --
+# eine Version-Abfrage (XEP-0092) liefert den echten Namen.
+def _name_from_caps_node(node):
+    if not node:
+        return ""
+    host = node.split("//")[-1].split("/")[0].split("#")[0]
+    if host.startswith("www."):
+        host = host[4:]
+    label = host.split(".")[0]
+    return label[:1].upper() + label[1:] if label else ""
 
 
 # Konkrete OMEMO-Plugin-Implementierung (Storage + Trust-Politik).
@@ -112,6 +127,9 @@ class ArchiverBot(ClientXMPP):
         self._muc_nick = xmpp_cfg.get("muc_nick") or self.boundjid.local
         self._joined_rooms = set()
         self._loops_started = False
+        # Volle JIDs, deren Client-Software bereits aufgeloest wurde (oder gerade
+        # wird). Verhindert wiederholte Abfragen bei jeder Presence/Bestaetigung.
+        self._clients_probed = set()
         # True erst nach session_start (Sitzung steht). Verhindert Senden in eine
         # tote/halboffene Verbindung -> ausgehende Nachrichten bleiben in der Outbox.
         self._session_ready = False
@@ -142,6 +160,11 @@ class ArchiverBot(ClientXMPP):
         self.register_plugin("xep_0334")  # Message Processing Hints
         self.register_plugin("xep_0045")  # Multi-User Chat
         self.register_plugin("xep_0184")  # Empfangsbestaetigungen
+        self.register_plugin("xep_0115")  # Entity Capabilities (Client-Erkennung, passiv)
+        # Software Version: beantwortet Anfragen mit dem Produktnamen (ohne OS-Angabe,
+        # die muss niemand von aussen erfahren) und fragt umgekehrt Gegenstellen ab.
+        self.register_plugin("xep_0092", {"name": "xmpp-omemo-web-client",
+                                          "version": APP_VERSION, "os": ""})
         self.register_plugin("xep_0313")  # Message Archive Management (MAM)
         self.register_plugin("xep_0363")  # HTTP File Upload (Anhaenge)
         self.register_plugin("xep_0066")  # Out of Band Data (oob)
@@ -159,6 +182,8 @@ class ArchiverBot(ClientXMPP):
         self.add_event_handler("carbon_sent", self._on_carbon_sent)
         self.add_event_handler("groupchat_message", self._on_groupchat)
         self.add_event_handler("receipt_received", self._on_receipt)
+        # Presence mit Entity Capabilities -> Client der Gegenstelle erkennen.
+        self.add_event_handler("entity_caps", self._on_entity_caps)
         self.add_event_handler("roster_update", lambda _e: self._persist_roster())
         self.add_event_handler("disconnected", self._on_disconnected)
         # Avatar-Aenderung eines Kontakts (Foto-Hash in dessen Presence, XEP-0153).
@@ -314,6 +339,10 @@ class ArchiverBot(ClientXMPP):
         if stanza["type"] not in ("chat", "normal"):
             return
         stanza_id = stanza["id"] or ""
+        # Bei eigenen (von einem anderen Geraet gesendeten) Nachrichten die
+        # Message-ID mitfuehren: nur darueber lassen sich spaetere
+        # Empfangsbestaetigungen dieser Nachricht zuordnen.
+        out_id = stanza_id if direction == "out" else None
         xep_0384 = self["xep_0384"]
         namespaces = xep_0384.is_encrypted(stanza)
 
@@ -322,7 +351,7 @@ class ArchiverBot(ClientXMPP):
             # Leere Nachrichten (Chat-States/Marker ohne Inhalt) nicht archivieren.
             if not body or not body.strip():
                 return
-            if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True):
+            if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True, msg_id=out_id):
                 logger.info("Archiviert (plain, %s) %s", direction, partner_jid)
                 if direction == "in":
                     asyncio.create_task(self._maybe_push(partner_jid, in_room=False))
@@ -336,13 +365,15 @@ class ArchiverBot(ClientXMPP):
             # (von anderen eigenen Clients gesendet) -> nicht archivieren.
             if not body.strip():
                 return
-            if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True, namespace=namespace):
+            if self._archive.store(partner_jid, direction, body, stanza_id, decrypted=True,
+                                   namespace=namespace, msg_id=out_id):
                 logger.info("Archiviert (omemo, %s) %s", direction, partner_jid)
                 if direction == "in":
                     asyncio.create_task(self._maybe_push(partner_jid, in_room=False))
         except Exception as e:
             logger.warning("Entschluesselung fehlgeschlagen (%s) %s: %s", direction, partner_jid, type(e).__name__)
-            self._archive.store(partner_jid, direction, None, stanza_id, decrypted=False, namespace=namespace)
+            self._archive.store(partner_jid, direction, None, stanza_id, decrypted=False,
+                                namespace=namespace, msg_id=out_id)
 
     async def _on_message(self, stanza):
         # Gruppenchat laeuft ueber groupchat_message; Carbons ueber eigene Handler.
@@ -370,6 +401,10 @@ class ArchiverBot(ClientXMPP):
 
     async def _on_carbon_received(self, stanza):
         inner = stanza["carbon_received"]
+        # Quittungen zu Nachrichten, die ein anderes eigenes Geraet gesendet hat,
+        # erreichen uns nur als Carbon-Kopie -- vor der Archivierung auswerten
+        # (sie haben keinen Body und wuerden sonst kommentarlos verworfen).
+        self._record_receipt(inner)
         partner = inner["from"].bare
         if partner == self._own_bare:
             return
@@ -396,10 +431,77 @@ class ArchiverBot(ClientXMPP):
 
     # Empfangsbestaetigung (XEP-0184) -> Nachricht als zugestellt markieren.
     async def _on_receipt(self, stanza):
+        self._record_receipt(stanza)
+
+    # Haelt fest, WELCHES Geraet eine Nachricht bestaetigt hat. Die Quittung kommt
+    # von der vollen JID des Empfaenger-Clients; bei mehreren Geraeten (OMEMO) kann
+    # dieselbe Nachricht mehrfach bestaetigt werden -> jede Quittung wird gespeichert.
+    def _record_receipt(self, stanza):
         try:
             receipt_id = stanza["receipt"]
-            if receipt_id:
-                self._archive.mark_delivered(receipt_id)
+            if not receipt_id:
+                return
+            frm = stanza["from"]
+            full = frm.full if frm else ""
+            if not full:
+                return
+            self._archive.mark_delivered(receipt_id)
+            if self._archive.add_receipt(receipt_id, full, frm.resource):
+                logger.info("Zustellung bestaetigt von %s", frm.bare)
+            asyncio.create_task(self._resolve_client(full))
+        except Exception as e:
+            logger.debug("Empfangsbestaetigung nicht auswertbar: %s", type(e).__name__)
+
+    # --- Client-Erkennung (welches Geraet steckt hinter einer Ressource?) ----
+
+    # Presence mit Caps (XEP-0115): Client-Kennung der Ressource nachziehen.
+    async def _on_entity_caps(self, pres):
+        try:
+            frm = pres["from"]
+            if frm.bare == self._own_bare and frm.resource == self.boundjid.resource:
+                return
+            # Gruppenraeume ausklammern: Eine MUC-Teilnehmer-JID (raum@.../Nick) kann
+            # nie ein bestaetigendes Geraet sein -- Empfangsbestaetigungen gibt es nur
+            # in 1:1. Ohne diese Sperre loeste jeder Reconnect eine Version-Abfrage an
+            # saemtliche Teilnehmer aller beigetretenen Raeume aus.
+            if frm.bare in self._joined_rooms or self._archive.is_room(frm.bare):
+                return
+            await self._resolve_client(frm.full, pres["caps"]["node"] or "")
+        except Exception as e:
+            logger.debug("Caps-Auswertung fehlgeschlagen: %s", type(e).__name__)
+
+    # Bestimmt Produkt/Version/OS hinter einer vollen JID: zuerst passiv aus den
+    # zwischengespeicherten Entity Capabilities, danach einmalig per Software-Version
+    # (XEP-0092). Ergebnis wird persistiert; je JID wird nur einmal pro Prozesslauf
+    # abgefragt, damit Presence-Fluten keine Anfragewelle ausloesen.
+    async def _resolve_client(self, full_jid, caps_node=""):
+        if not full_jid or full_jid in self._clients_probed:
+            return
+        self._clients_probed.add(full_jid)
+        name, node = "", caps_node
+        try:
+            caps = await self["xep_0115"].get_caps(jid=full_jid)
+            if caps is not None:
+                node = (caps["node"] or node).split("#")[0]
+                for identity in caps["identities"]:
+                    category, _typ, _lang, ident_name = identity
+                    if category == "client" and ident_name:
+                        name = ident_name
+                        break
+        except Exception:
+            pass
+        if name or node:
+            self._archive.store_client_info(
+                full_jid, name or _name_from_caps_node(node), "", "", node, "caps")
+        # Genauere Angabe (Produktname, Version, Plattform) einmalig erfragen.
+        # Viele Clients beantworten das nicht -- dann bleibt es bei den Caps.
+        try:
+            iq = await self["xep_0092"].get_version(JID(full_jid), timeout=15)
+            ver = iq["software_version"]
+            if ver["name"]:
+                self._archive.store_client_info(full_jid, ver["name"], ver["version"] or "",
+                                                ver["os"] or "", node, "version")
+                logger.info("Client erkannt: %s -> %s", full_jid, ver["name"])
         except Exception:
             pass
 

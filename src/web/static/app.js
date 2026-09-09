@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben
-// Version: 1.11.0
+// Version: 1.12.0
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -12,6 +12,8 @@
 // - Relative Zeitangabe ("vor X Min") vor dem Zeitstempel der letzten Nachricht.
 // - Anhaenge (OMEMO-Media): Bilder werden inline angezeigt, Dateien verlinkt
 //   (Auslieferung entschluesselt ueber den /media-Proxy).
+// - Zustellanzeige: zwei Haken oeffnen per Klick die Liste der Geraete, die die
+//   Nachricht quittiert haben (XEP-0184); Nachzuegler werden live nachgetragen.
 // Hinweis:
 // - Nutzerinhalte werden ueber textContent eingefuegt (XSS-Schutz). SVG-Icons
 //   stammen aus statischen Markup-Konstanten, nicht aus Nutzerdaten.
@@ -191,6 +193,46 @@
     navigator.serviceWorker.register("/sw.js").then(function (r) { swReg = r; }).catch(function () {});
   }
 
+  // --- Zustellanzeige (Empfangsbestaetigungen, XEP-0184) --------------------
+
+  // Mehrzeiliger Tooltip mit allen Geraeten, die die Nachricht quittiert haben.
+  function deliveryTip(rec) {
+    if (!rec || !rec.length) return "Zugestellt (bestaetigendes Geraet unbekannt)";
+    return "Zugestellt an:\n" + rec.map(function (r) {
+      return r.who + (r.os ? " (" + r.os + ")" : "") + " - " + r.ts;
+    }).join("\n");
+  }
+
+  // Ein Haken = gesendet; zwei Haken = vom Client des Empfaengers quittiert. Bei
+  // mehreren quittierenden Geraeten steht die Anzahl daneben.
+  function tickNode(delivered, rec) {
+    if (!delivered) return icon(TICK);
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "tickbtn";
+    btn.title = deliveryTip(rec);
+    btn.setAttribute("aria-label", "Zustellung anzeigen");
+    btn.appendChild(icon(TICK2));
+    if (rec && rec.length > 1) btn.appendChild(el("span", "tickn", String(rec.length)));
+    return btn;
+  }
+
+  // Aufklappbare Geraeteliste unter der Blase (initial verborgen).
+  function receiptsNode(rec) {
+    if (!rec || !rec.length) return null;
+    var panel = el("div", "receipts");
+    panel.hidden = true;
+    panel.appendChild(el("div", "receipts-head",
+      "Quittiert von " + rec.length + " Geraet" + (rec.length > 1 ? "en" : "")));
+    rec.forEach(function (r) {
+      var line = el("div", "receipt");
+      line.appendChild(el("span", "rc-who", r.who + (r.os ? " \u00b7 " + r.os : "")));
+      line.appendChild(el("span", "rc-sub", (r.resource || r.jid || "") + " \u00b7 " + r.ts));
+      panel.appendChild(line);
+    });
+    return panel;
+  }
+
   // Archivierte Nachrichtenblase.
   function renderMessage(m) {
     var row = el("div", "row " + (m.direction === "out" ? "out" : "in"));
@@ -229,8 +271,17 @@
     }
     var meta = el("div", "meta");
     meta.appendChild(el("span", null, m.ts));
-    if (m.direction === "out") meta.appendChild(icon(m.status === "delivered" ? TICK2 : TICK));
-    bubble.appendChild(meta);
+    if (m.direction === "out") {
+      var rec = m.receipts || [];
+      var delivered = m.delivered || m.status === "delivered";
+      meta.appendChild(tickNode(delivered, rec));
+      bubble.appendChild(meta);
+      var panel = receiptsNode(rec);
+      if (panel) bubble.appendChild(panel);
+      row.setAttribute("data-rc", String(rec.length));
+    } else {
+      bubble.appendChild(meta);
+    }
     row.appendChild(bubble);
     return row;
   }
@@ -602,6 +653,46 @@
     setClosed(getClosed().filter(function (p) { return p !== convPartner; }));
     var _cm = getCollapsed(); if (_cm[convPartner] != null) { delete _cm[convPartner]; setCollapsed(_cm); }
 
+    // Empfangsbestaetigungen treffen erst nach dem Rendern ein (oft Sekunden bis
+    // Stunden spaeter, wenn ein Geraet des Empfaengers wieder online geht). Das
+    // Polling liefert nur neue Nachrichten -- die Haken bereits gezeichneter Blasen
+    // muessen daher nachgezogen werden, sonst braeuchte es ein Neuladen der Seite.
+    function applyDelivery(map) {
+      if (!map) return;
+      Object.keys(map).forEach(function (id) {
+        var row = box.querySelector('.row.out[data-id="' + id + '"]');
+        if (!row) return;
+        var rec = map[id] || [];
+        if (row.getAttribute("data-rc") === String(rec.length)) return;
+        var bubble = row.querySelector(".msg");
+        var meta = row.querySelector(".meta");
+        if (!bubble || !meta) return;
+        var old = bubble.querySelector(".receipts");
+        var wasOpen = old ? !old.hidden : false;
+        if (old) bubble.removeChild(old);
+        // Zeitstempel (erstes Kind) behalten, Haken neu setzen.
+        while (meta.children.length > 1) meta.removeChild(meta.lastChild);
+        meta.appendChild(tickNode(true, rec));
+        var panel = receiptsNode(rec);
+        if (panel) {
+          panel.hidden = !wasOpen;
+          bubble.appendChild(panel);
+        }
+        row.setAttribute("data-rc", String(rec.length));
+      });
+    }
+
+    // Klick auf die Haken: Geraeteliste auf-/zuklappen (der Tooltip ist auf
+    // Touch-Geraeten nicht erreichbar).
+    box.addEventListener("click", function (e) {
+      var btn = e.target.closest ? e.target.closest(".tickbtn") : null;
+      if (!btn) return;
+      e.preventDefault();
+      var bubble = btn.closest(".msg");
+      var panel = bubble ? bubble.querySelector(".receipts") : null;
+      if (panel) panel.hidden = !panel.hidden;
+    });
+
     // Live: neue Nachrichten anhaengen. Erkennt MAM-Nachladungen (alte Zeit) und laedt
     // dann die Seite neu fuer korrekte Chronologie -- ausser waehrend manuellem Nachladen.
     function pollConversation() {
@@ -610,6 +701,7 @@
         .then(function (data) {
           if (!data) return;
           var msgs = data.messages || [];
+          applyDelivery(data.delivery);
           if (loadingOlder) {
             // Nur Cursor mitziehen, nicht anhaengen/neu laden (Paginierung haengt selbst an).
             msgs.forEach(function (m) { if (m.id > lastId) lastId = m.id; });
