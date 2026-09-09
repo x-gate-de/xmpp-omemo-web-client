@@ -1066,7 +1066,7 @@ def _media_fetch_decrypt(body, allowed_domain):
     key, iv = raw[-32:], raw[:-32]
     https = "https://%s%s" % (u.netloc, u.path)
     try:
-        req = urllib.request.Request(https, headers={"User-Agent": "x-gate-chat"})
+        req = urllib.request.Request(https, headers={"User-Agent": "xmpp-omemo-web-client"})
         with urllib.request.urlopen(req, timeout=20, context=ssl.create_default_context()) as resp:
             data = resp.read(_MEDIA_MAX + 1)
     except Exception:

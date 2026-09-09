@@ -4,6 +4,8 @@
 - Optional: MAM backfill to cover daemon downtime.
 
 ## [1.11.1] - 2026-09-09
+- The media proxy now sends `User-Agent: xmpp-omemo-web-client` when fetching an
+  encrypted attachment; it still carried a leftover internal name.
 - The name the daemon reports in software version replies
   ([XEP-0092](https://xmpp.org/extensions/xep-0092.html)) is now
   "xmpp-omemo-web-client" — that is what contacts see in the device list of an
