@@ -116,12 +116,34 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
 - Der Daemon persistiert das Roster (contacts). Die Web-UI zeigt die Kontakte mit
   Namen und JID; ein Klick startet/oeffnet die 1:1-Konversation.
 
-### F11 — Oeffentliche Gruppenraeume (MUC, unverschluesselt)
-- Der Daemon entdeckt die MUC-Dienste/Raeume des Servers (muc_available).
-- Die Web-UI listet verfuegbare und beigetretene Raeume; Beitreten markiert den Raum,
-  der Daemon betritt ihn (ohne Verlaufswiederholung) und bleibt verbunden.
-- Gruppennachrichten werden unverschluesselt empfangen/gesendet und mit Absender-Nick
-  archiviert. OMEMO wird im MUC nicht verwendet (Firmen-Gruppenchats sind unverschluesselt).
+### F11 — Gruppenraeume (MUC)
+- Der Daemon ermittelt die bekannten Raeume aus zwei Quellen und legt sie in
+  `muc_available` ab (Spalte `source`):
+  1. **Disco** der MUC-Dienste des Servers — nur oeffentlich gelistete Raeume.
+  2. **Lesezeichen des Nutzers** — private, nicht gelistete Raeume stehen
+     ausschliesslich hier. Gelesen und zusammengefuehrt werden alle drei
+     gebraeuchlichen Ablagen: PEP `urn:xmpp:bookmarks:1` (XEP-0402), PEP
+     `storage:bookmarks` (XEP-0048 ueber XEP-0223) und der private XML-Speicher
+     (XEP-0048 ueber XEP-0049).
+  Fuehrt ein Client einen privaten Raum nur lokal (ohne serverseitiges Lesezeichen),
+  ist er auf keinem Weg auffindbar; die Raumseite bietet dafuer das Beitreten per
+  eingegebener Raum-JID an.
+  Die Liste wird beim Start und danach alle 30 Minuten aufgefrischt.
+- Die Web-UI listet verfuegbare und beigetretene Raeume (Raeume aus Lesezeichen sind
+  gekennzeichnet); Beitreten markiert den Raum, der Daemon betritt ihn (ohne
+  Verlaufswiederholung) und bleibt verbunden. Es wird nie automatisch beigetreten —
+  auch nicht bei `autojoin` im Lesezeichen.
+- Unverschluesselte Raeume: Nachrichten werden im Klartext empfangen/gesendet und mit
+  Absender-Nick archiviert.
+- Verschluesselte Raeume (OMEMO im MUC): Eingehende Nachrichten werden entschluesselt
+  und archiviert; der Raum wird als verschluesselt markiert (`mucs.encrypted`).
+  Senden aus der Web-UI ist dort gesperrt — eine Klartext-Nachricht in einem
+  verschluesselten Raum laege serverseitig offen und wuerde die Erwartung aller
+  Beteiligten brechen. Die UI blendet das Eingabefeld aus; ein dennoch eingestellter
+  Auftrag endet als Outbox-Fehler.
+- Aus dem MUC-Archiv (MAM) nachgeladene verschluesselte Nachrichten werden NICHT
+  entschluesselt (Forward Secrecy: sie stammen aus der Zeit vor dem Beitritt) und als
+  unlesbar abgelegt.
 - Hinweis: Der Daemon ist als Teilnehmer im Raum praesent (eigener Nick).
 
 ### F12 — Volltextsuche

@@ -42,7 +42,8 @@
   <span class="who">
     <div class="name">{{ name }}</div>
     <div class="sub">
-      {% if is_room %}Oeffentlicher Raum &middot; {{ partner }}
+      {% if is_room %}{% if room_encrypted %}<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        Verschluesselter Raum{% else %}Oeffentlicher Raum{% endif %} &middot; {{ partner }}
       {% else %}
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
         Ende-zu-Ende verschluesselt &middot; {{ partner }}
@@ -96,6 +97,14 @@
   <p>Noch keine Nachrichten. Schreibe die erste unten.</p>
 </div>
 
+{% if is_room and room_encrypted %}
+{# In einem verschluesselten Raum kann der Daemon (noch) nicht senden. Lieber gar
+   kein Eingabefeld als eine Nachricht, die im Klartext hineinginge. #}
+<div class="empty">
+  <p>Dieser Raum ist Ende-zu-Ende-verschluesselt. Mitlesen und Archivieren funktioniert,
+     Senden aus der Web-UI noch nicht — dafuer bitte einen Chat-Client verwenden.</p>
+</div>
+{% else %}
 <form class="composer" method="post" action="/c/{{ partner }}/send" enctype="multipart/form-data">
   <div class="reply-preview" id="reply-preview" hidden>
     <div class="reply-preview-body">
@@ -118,5 +127,6 @@
     </button>
   </div>
 </form>
+{% endif %}
 {% endblock %}
 {% block scripts %}<script src="/static/app.js?v={{ asset_ver }}"></script>{% endblock %}

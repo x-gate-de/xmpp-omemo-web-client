@@ -485,6 +485,19 @@ a.list-row:hover {
 .api-note { color: var(--muted); font-size: 0.88rem; margin-top: 10px; line-height: 1.5; }
 .tag-joined { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 0.82rem; font-weight: 600; }
 .tag-joined svg { width: 15px; height: 15px; }
+/* Kennzeichnet Raeume, die nur aus den Lesezeichen bekannt sind (privat,
+   vom Server nicht gelistet). */
+/* Direktes Beitreten per Raum-JID (nicht gelistete Raeume). */
+.joinform { display: flex; gap: 8px; margin: 4px 0 6px; }
+.joinform input[type=text] {
+  flex: 1; min-width: 0; padding: 9px 12px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface); color: var(--fg); font: inherit;
+}
+.joinhint { color: var(--muted); font-size: 0.78rem; margin-bottom: 16px; }
+.tag-book {
+  display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
+  border: 1px solid var(--border); color: var(--muted); font-size: 0.72rem;
+}
 
 /* --- Empty State --------------------------------------------------------- */
 .empty { text-align: center; color: var(--muted); padding: 56px 20px; }
@@ -1094,6 +1107,7 @@ a.list-row:hover {
 }
 :root[data-design="leitstand"] .row.pending.failed .meta { color: var(--danger); }
 :root[data-design="leitstand"] .dev-trust { border-radius: 2px; letter-spacing: .06em; }
+:root[data-design="leitstand"] .tag-book { border-radius: 2px; letter-spacing: .06em; }
 
 /* Eingabe/Knoepfe: rechteckig, Senden als gefuellter Block mit dunkler Schrift. */
 :root[data-design="leitstand"] .icon-btn {

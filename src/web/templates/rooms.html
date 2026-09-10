@@ -1,7 +1,17 @@
 {% extends "base.html" %}
 {% block title %}Raeume - Chat{% endblock %}
 {% block content %}
-<div class="page-title">Oeffentliche Raeume</div>
+<div class="page-title">Raeume</div>
+
+{# Private Raeume, die weder gelistet noch als Lesezeichen hinterlegt sind, kann der
+   Daemon nicht finden. Wer die JID kennt, tritt hier direkt bei. #}
+<form class="joinform" method="post" action="/rooms/join">
+  <input type="text" name="room_jid" placeholder="raum@conference.example.com" autocomplete="off"
+         aria-label="Raum-JID" required>
+  <button class="btn" type="submit">Beitreten</button>
+</form>
+<div class="joinhint">Privater Raum? Mit der Raum-JID direkt beitreten — nicht gelistete Raeume
+  erscheinen sonst nur, wenn dein Chat-Client ein Lesezeichen dafuer angelegt hat.</div>
 
 {% if joined %}
   <div class="section-title">Beigetreten</div>
@@ -31,7 +41,7 @@
         <span class="avatar room" style="--h: {{ r.hue }}">{{ r.initials }}</span>
         <span class="row-main">
           <span class="row-name">{{ r.name }}</span>
-          <span class="row-sub"><span class="row-jid">{{ r.jid }}</span></span>
+          <span class="row-sub"><span class="row-jid">{{ r.jid }}</span>{% if r.bookmark %} <span class="tag-book">Lesezeichen</span>{% endif %}</span>
         </span>
         {% if r.joined %}
           <span class="tag-joined">

@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben
-# Version: 2.13.0
+# Version: 2.14.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -996,6 +996,10 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
     conn = _open_ro(db_path)
     try:
         is_room = _is_room(conn, partner)
+        # Verschluesselter Raum: der Daemon kann hier (noch) nicht senden, die Web-UI
+        # bietet deshalb kein Eingabefeld an statt eine Fehlermeldung zu provozieren.
+        erow = conn.execute("SELECT encrypted FROM mucs WHERE room_jid = ?", (partner,)).fetchone()
+        room_encrypted = bool(erow and erow["encrypted"])
         row = conn.execute("SELECT name FROM contacts WHERE jid = ?", (partner,)).fetchone()
         contact_name = row["name"] if row else None
         rrow = conn.execute("SELECT name FROM muc_available WHERE room_jid = ?", (partner,)).fetchone()
@@ -1019,7 +1023,7 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
         oldest_ts=(oldest["ts_raw"] if oldest else 0), oldest_id=(oldest["id"] if oldest else 0),
         has_more=has_more, is_room=is_room, initials=_initials(name if name != partner else "", partner),
         hue=_hue(partner), has_avatar=bool(avatar_ver), avatar_ver=avatar_ver,
-        nav_active="archiv", account_jid=acc["jid"],
+        room_encrypted=room_encrypted, nav_active="archiv", account_jid=acc["jid"],
         account_state=_account_state(acc["jid"]), push_enabled=_PUSH_ENABLED,
     )
 
@@ -1283,7 +1287,8 @@ def rooms(acc: dict = Depends(require_account)):
         ).fetchall()
         joined_set = {r["room_jid"] for r in joined}
         available = conn.execute(
-            "SELECT room_jid, name FROM muc_available ORDER BY LOWER(COALESCE(name, room_jid))"
+            "SELECT room_jid, name, COALESCE(source, 'disco') AS source FROM muc_available "
+            "ORDER BY LOWER(COALESCE(name, room_jid))"
         ).fetchall()
     finally:
         conn.close()
@@ -1291,6 +1296,8 @@ def rooms(acc: dict = Depends(require_account)):
                      "initials": _initials(r["name"], r["room_jid"]), "hue": _hue(r["room_jid"])} for r in joined]
     avail_items = [
         {"jid": r["room_jid"], "name": r["name"] or r["room_jid"], "joined": r["room_jid"] in joined_set,
+         # Aus den Lesezeichen: private Raeume, die der Server nicht auflistet.
+         "bookmark": r["source"] == "bookmark",
          "initials": _initials(r["name"], r["room_jid"]), "hue": _hue(r["room_jid"])}
         for r in available
     ]
@@ -1303,6 +1310,10 @@ def rooms(acc: dict = Depends(require_account)):
 @app.post("/rooms/join")
 def join_room(room_jid: str = Form(...), acc: dict = Depends(require_account)):
     target = (room_jid or "").strip()
+    # Die JID kann jetzt auch von Hand kommen (nicht gelistete Raeume) -- grob pruefen,
+    # damit kein Unsinn als Raum in der Liste landet.
+    if "@" not in target or " " in target or target.startswith("@") or target.endswith("@"):
+        return RedirectResponse(url="/rooms", status_code=status.HTTP_303_SEE_OTHER)
     if target:
         conn = _open_rw(acc["archive_path"])
         try:

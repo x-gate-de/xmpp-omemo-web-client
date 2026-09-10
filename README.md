@@ -42,8 +42,17 @@ message the moment it arrives and stores it centrally. That is what this project
   version query ([XEP-0092](https://xmpp.org/extensions/xep-0092.html)) per unknown
   resource. Acknowledged means received, not read — chat markers
   ([XEP-0333](https://xmpp.org/extensions/xep-0333.html)) are not evaluated.
-- **Public group chats (MUC)**: discover, join, read and post (cleartext; no OMEMO
-  in MUC, by design).
+- **Group chats (MUC)**: the room list is built from two sources — the server's
+  service discovery (public rooms only) **and the user's bookmarks**
+  ([XEP-0402](https://xmpp.org/extensions/xep-0402.html), plus the two older
+  [XEP-0048](https://xmpp.org/extensions/xep-0048.html) stores). A private room is
+  not discoverable server-side, so without the bookmarks it is invisible. Rooms only
+  a client keeps locally can be added by typing the room JID. Joining is always a
+  deliberate click, never automatic — not even for an `autojoin` bookmark.
+- **Encrypted rooms**: OMEMO group messages are decrypted and archived. Sending into
+  an encrypted room is refused — cleartext there would lie open on the server and
+  show up as unencrypted for everyone else; the composer is hidden in such rooms.
+  Open rooms remain cleartext, as designed.
 - **Design presets** (gear → Design): "Standard" (light/dark, six accent colours)
   and "Leitstand" — a dark, hairline, monospace look in which colour only carries
   meaning. Dark-only, so the mode and accent pickers are hidden in it. The choice

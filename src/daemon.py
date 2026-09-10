@@ -1,14 +1,15 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben
-# Version: 1.8.3
+# Version: 1.9.2
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
 #   nimmt an oeffentlichen (unverschluesselten) Gruppenraeumen teil, archiviert
 #   alles und versendet aus der Outbox (1:1 OMEMO, Gruppe als Klartext).
 # Ablauf:
-# - Anmeldung; Roster persistieren; MUC-Dienste/Raeume entdecken; beigetretene
+# - Anmeldung; Roster persistieren; MUC-Dienste/Raeume entdecken (Disco + eigene
+#   Lesezeichen, XEP-0402/0048); beigetretene
 #   Raeume betreten; Carbons aktivieren; eingehende Nachrichten archivieren;
 #   Empfangsbestaetigungen (XEP-0184) samt bestaetigendem Geraet auswerten;
 #   Client-Software der Gegenstellen erkennen (XEP-0115/0092); Outbox abarbeiten.
@@ -159,6 +160,8 @@ class ArchiverBot(ClientXMPP):
         self.register_plugin("xep_0280")  # Message Carbons
         self.register_plugin("xep_0334")  # Message Processing Hints
         self.register_plugin("xep_0045")  # Multi-User Chat
+        self.register_plugin("xep_0402")  # PEP Native Bookmarks (private Raeume)
+        self.register_plugin("xep_0048")  # Bookmarks (alter privater XML-Speicher)
         self.register_plugin("xep_0184")  # Empfangsbestaetigungen
         self.register_plugin("xep_0115")  # Entity Capabilities (Client-Erkennung, passiv)
         # Software Version: beantwortet Anfragen mit dem Produktnamen (ohne OS-Angabe,
@@ -217,6 +220,7 @@ class ArchiverBot(ClientXMPP):
         if not self._loops_started:
             self._loops_started = True
             asyncio.create_task(self._discover_rooms())
+            asyncio.create_task(self._rooms_refresh_loop())
             asyncio.create_task(self._outbox_loop())
             asyncio.create_task(self._avatar_sweep())
 
@@ -296,12 +300,61 @@ class ArchiverBot(ClientXMPP):
                 pass
             await asyncio.sleep(0.4)  # den XMPP-Server nicht fluten
 
-    # Oeffentliche MUC-Raeume des Servers entdecken und speichern.
+    # Lesezeichen des Nutzers lesen. Private/nicht gelistete Raeume stehen NUR hier --
+    # die Dienst-Discovery listet sie nicht. Es gibt drei gebraeuchliche Ablageorte,
+    # und Clients pflegen sie nicht einheitlich; deshalb werden alle drei gelesen und
+    # zusammengefuehrt statt beim ersten Treffer aufzuhoeren:
+    #   1. PEP-Knoten "urn:xmpp:bookmarks:1" (XEP-0402, aktueller Standard)
+    #   2. PEP-Knoten "storage:bookmarks"    (XEP-0048 ueber XEP-0223)
+    #   3. privater XML-Speicher             (XEP-0048 ueber XEP-0049, aeltester Weg)
+    # Rueckgabe: {room_jid: Anzeigename}.
+    async def _fetch_bookmarks(self):
+        rooms = {}
+        counts = {}
+
+        def add(jid, name):
+            jid = str(jid or "")
+            # Der zuerst gelesene (modernere) Speicher gewinnt beim Namen.
+            if jid and jid not in rooms:
+                rooms[jid] = name or jid
+
+        try:
+            res = await self["xep_0060"].get_items(
+                jid=self._own_bare, node="urn:xmpp:bookmarks:1", timeout=15)
+            items = res["pubsub"]["items"]["substanzas"]
+            counts["0402"] = len(items)
+            for item in items:
+                add(item["id"], item["conference"]["name"])
+        except Exception as e:
+            logger.debug("PEP-Lesezeichen (XEP-0402) nicht lesbar: %s", type(e).__name__)
+
+        for method, path in (("xep_0223", "pep"), ("xep_0049", "private")):
+            try:
+                res = await self["xep_0048"].get_bookmarks(method=method, timeout=15)
+                if path == "pep":
+                    marks = res["pubsub"]["items"]["item"]["bookmarks"]
+                else:
+                    marks = res["private"]["bookmarks"]
+                confs = list(marks["conferences"])
+                counts[method] = len(confs)
+                for conf in confs:
+                    add(conf["jid"], conf["name"])
+            except Exception as e:
+                logger.debug("Lesezeichen (%s) nicht lesbar: %s", method, type(e).__name__)
+
+        if counts:
+            logger.info("Lesezeichen gelesen: %s -> %d Raeume",
+                        ", ".join("%s=%d" % (k, v) for k, v in sorted(counts.items())), len(rooms))
+        return rooms
+
+    # Bekannte Raeume ermitteln: oeffentlich gelistete des Servers (Disco) plus die
+    # aus den Lesezeichen. Ohne die Lesezeichen fehlen genau die privaten Raeume, in
+    # denen der Nutzer Mitglied ist -- sie sind serverseitig nicht auffindbar.
     async def _discover_rooms(self):
+        available = {}
         try:
             domain = self.boundjid.domain
             services = await self["xep_0030"].get_items(jid=domain)
-            available = []
             for svc in services["disco_items"]["items"]:
                 svc_jid = svc[0]
                 try:
@@ -312,13 +365,26 @@ class ArchiverBot(ClientXMPP):
                         continue
                     rooms = await self["xep_0030"].get_items(jid=svc_jid)
                     for r in rooms["disco_items"]["items"]:
-                        available.append((r[0], r[2] or r[0]))
+                        available[r[0]] = (r[2] or r[0], "disco")
                 except Exception:
                     continue
-            self._archive.set_available_rooms(available)
-            logger.info("MUC-Raeume entdeckt: %d", len(available))
         except Exception as e:
             logger.warning("MUC-Discovery fehlgeschlagen: %s", type(e).__name__)
+        bookmarks = await self._fetch_bookmarks()
+        for jid, name in bookmarks.items():
+            available[jid] = (name, "bookmark")
+        if not available:
+            return
+        self._archive.set_available_rooms([(j, n, src) for j, (n, src) in available.items()])
+        logger.info("Raeume bekannt: %d (davon %d aus Lesezeichen)", len(available), len(bookmarks))
+
+    # Raumliste periodisch auffrischen: ein neu angelegter privater Raum taucht sonst
+    # erst nach einem Neustart des Daemons auf.
+    async def _rooms_refresh_loop(self):
+        while True:
+            await asyncio.sleep(1800)
+            if self._session_ready and self.is_connected():
+                await self._discover_rooms()
 
     # Betritt alle als beigetreten markierten Raeume, die noch nicht aktiv sind.
     async def _join_pending_rooms(self):
@@ -415,16 +481,46 @@ class ArchiverBot(ClientXMPP):
         partner = inner["to"].bare
         await self._archive_stanza(inner, partner, "out")
 
-    # Gruppennachricht (unverschluesselt) archivieren.
+    # Gruppennachricht archivieren. Firmenraeume sind unverschluesselt, private
+    # Raeume koennen aber OMEMO verwenden -- dann traegt der Klartext-Body nur den
+    # Hinweistext und der Inhalt muss entschluesselt werden.
     async def _on_groupchat(self, stanza):
         room = stanza["from"].bare
         nick = stanza["from"].resource
-        body = stanza["body"]
-        if not body or not nick:
+        if not nick:
             return
         # Eigene (reflektierte) Nachrichten als 'out' markieren.
         direction = "out" if nick == self._muc_nick else "in"
         stanza_id = stanza["id"] or ""
+        xep_0384 = self["xep_0384"]
+        namespaces = xep_0384.is_encrypted(stanza)
+
+        if namespaces:
+            namespace = next(iter(namespaces))
+            # Merken: In diesem Raum wird verschluesselt gesprochen -> aus der Web-UI
+            # darf hier nichts im Klartext hineingesendet werden.
+            self._archive.mark_room_encrypted(room)
+            try:
+                # slixmpp-omemo loest die echte JID des Absenders ueber die
+                # Teilnehmerliste auf; das setzt einen nicht-anonymen Raum voraus.
+                decrypted, _info = await xep_0384.decrypt_message(stanza)
+                body = decrypted["body"] or ""
+                if not body.strip():
+                    return
+                if self._archive.store(room, direction, body, stanza_id, decrypted=True,
+                                       namespace=namespace, sender=nick):
+                    logger.info("Archiviert (omemo, Raum %s) %s", direction, room)
+                    if direction == "in":
+                        asyncio.create_task(self._maybe_push(room, in_room=True))
+            except Exception as e:
+                logger.warning("Entschluesselung im Raum %s fehlgeschlagen: %s", room, type(e).__name__)
+                self._archive.store(room, direction, None, stanza_id, decrypted=False,
+                                    namespace=namespace, sender=nick)
+            return
+
+        body = stanza["body"]
+        if not body:
+            return
         if self._archive.store(room, direction, body, stanza_id, decrypted=True, sender=nick):
             if direction == "in":
                 asyncio.create_task(self._maybe_push(room, in_room=True))
@@ -653,6 +749,15 @@ class ArchiverBot(ClientXMPP):
     # Sendet eine Gruppennachricht (unverschluesselt). Die Reflexion wird archiviert.
     async def _send_groupchat(self, outbox_id, room, body):
         try:
+            # In einem verschluesselten Raum waere eine Klartext-Nachricht ein Bruch
+            # der Erwartung aller Beteiligten: Sie laege serverseitig offen und wuerde
+            # von den anderen Clients als unverschluesselt gekennzeichnet. Lieber ein
+            # sichtbarer Fehler als eine still im Klartext gesendete Nachricht.
+            if self._archive.is_room_encrypted(room):
+                self._archive.mark_outbox_error(
+                    outbox_id, "Raum ist Ende-zu-Ende-verschluesselt -- Senden aus der Web-UI noch nicht moeglich")
+                logger.warning("Senden in verschluesselten Raum %s abgelehnt", room)
+                return
             if room not in self._joined_rooms:
                 await self["xep_0045"].join_muc(JID(room), self._muc_nick, maxhistory="0")
                 self._joined_rooms.add(room)
@@ -710,10 +815,20 @@ class ArchiverBot(ClientXMPP):
 
         if kind == "muc":
             nick = inner["from"].resource
-            body = inner["body"]
-            if not body or not nick:
+            if not nick:
                 return False
             direction = "out" if nick == self._muc_nick else "in"
+            # Verschluesselte Raumnachrichten aus dem Archiv NICHT entschluesseln: Sie
+            # stammen aus der Zeit vor unserem Beitritt und wuerden ohnehin scheitern;
+            # ein Entschluesselungsversuch stoert nur den Ratchet-Zustand. Als
+            # unlesbar ablegen -- der Hinweistext waere als "Inhalt" irrefuehrend.
+            namespaces = self["xep_0384"].is_encrypted(inner)
+            if namespaces:
+                return self._archive.store(target, direction, None, stanza_id, decrypted=False,
+                                           namespace=next(iter(namespaces)), sender=nick, ts=ts)
+            body = inner["body"]
+            if not body:
+                return False
             return self._archive.store(target, direction, body, stanza_id, decrypted=True, sender=nick, ts=ts)
 
         # 1:1

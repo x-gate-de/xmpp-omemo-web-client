@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/archive.py
 # Autor: Torben
-# Version: 1.4.0
+# Version: 1.5.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Schreibseite des Daemons: Archiv, Outbox, Kontakte (Roster) und MUC-Raeume.
@@ -217,14 +217,30 @@ class MessageArchive:
     # --- MUC ----------------------------------------------------------------
 
     def set_available_rooms(self, rooms):
-        # rooms: Liste von (room_jid, name). Tabelle komplett ersetzen.
+        # rooms: Liste von (room_jid, name, source) mit source 'disco' | 'bookmark'.
+        # Tabelle komplett ersetzen -- verschwundene Raeume sollen auch verschwinden.
         self._conn.execute("DELETE FROM muc_available")
         now = time.time()
         self._conn.executemany(
-            "INSERT OR REPLACE INTO muc_available (room_jid, name, updated_ts) VALUES (?, ?, ?)",
-            [(r[0], r[1], now) for r in rooms],
+            "INSERT OR REPLACE INTO muc_available (room_jid, name, source, updated_ts) VALUES (?, ?, ?, ?)",
+            [(r[0], r[1], r[2] if len(r) > 2 else "disco", now) for r in rooms],
         )
         self._conn.commit()
+
+    # Merkt, dass in diesem Raum verschluesselt gesprochen wird (erste OMEMO-Nachricht).
+    def mark_room_encrypted(self, room_jid):
+        self._conn.execute(
+            "INSERT INTO mucs (room_jid, name, nick, joined, encrypted) VALUES (?, NULL, NULL, 1, 1) "
+            "ON CONFLICT(room_jid) DO UPDATE SET encrypted = 1",
+            (room_jid,),
+        )
+        self._conn.commit()
+
+    def is_room_encrypted(self, room_jid):
+        row = self._conn.execute(
+            "SELECT encrypted FROM mucs WHERE room_jid = ?", (room_jid,)
+        ).fetchone()
+        return bool(row and row[0])
 
     def joined_rooms(self):
         rows = self._conn.execute(

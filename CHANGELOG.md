@@ -3,6 +3,36 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.12.0] - 2026-09-10
+
+- **Private rooms were invisible.** The room list came from the MUC services' service
+  discovery alone, which only lists public rooms. A private room one is a member of is
+  not discoverable server-side and was therefore missing entirely. The daemon now also
+  reads the user's **bookmarks** and merges both sources; such rooms are tagged
+  "Lesezeichen" in the UI. All three common bookmark stores are read and merged (PEP
+  `urn:xmpp:bookmarks:1` per [XEP-0402](https://xmpp.org/extensions/xep-0402.html),
+  PEP `storage:bookmarks` and the private XML storage per
+  [XEP-0048](https://xmpp.org/extensions/xep-0048.html)) rather than stopping at the
+  first hit — a room may live in only one of them. A log line reports what each store
+  returned on every refresh.
+- The room list is refreshed at start-up and every 30 minutes. Joining stays a
+  deliberate click; an `autojoin` bookmark does not make the daemon join by itself.
+- New: **join by room JID** on the rooms page. A private room that the user's own
+  client only keeps locally (no server-side bookmark) is not discoverable at all —
+  with its JID it can still be added.
+- **OMEMO in group chats** is now decrypted: previously an encrypted room only ever
+  put the fallback message's notice text into the archive. slixmpp-omemo resolves the
+  sender's real JID via the occupant list, which requires a non-anonymous room.
+- **Sending into an encrypted room is refused.** A cleartext message there would lie
+  open on the server and show up as unencrypted for everyone else. The room is flagged
+  on the first encrypted message received (`mucs.encrypted`), the UI hides the
+  composer, and a job queued anyway ends as a visible outbox error instead of silently
+  going out in the clear.
+- Encrypted room messages pulled in via MAM are stored as unreadable instead of
+  carrying the notice text as their content: they predate the join and cannot be
+  opened anyway (forward secrecy), and attempting to decrypt them would only disturb
+  the ratchet state.
+
 ## [1.11.1] - 2026-09-09
 - The media proxy now sends `User-Agent: xmpp-omemo-web-client` when fetching an
   encrypted attachment; it still carried a leftover internal name.

@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/schema.py
 # Autor: Torben
-# Version: 1.3.0
+# Version: 1.4.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Zentrales SQLite-Schema fuer Archiv, Outbox, Read-State, Kontakte und MUC.
@@ -135,6 +135,9 @@ def ensure_schema(conn):
         "  joined INTEGER NOT NULL DEFAULT 1"
         ")"
     )
+    # Gesetzt, sobald eine OMEMO-verschluesselte Nachricht aus dem Raum ankam. Aus der
+    # Web-UI darf dann nicht im Klartext gesendet werden (siehe SPEC F11).
+    _add_column_if_missing(conn, "mucs", "encrypted", "encrypted INTEGER NOT NULL DEFAULT 0")
 
     # Empfangsbestaetigungen (XEP-0184) je gesendeter Nachricht. Eine Nachricht kann
     # von mehreren Geraeten des Empfaengers bestaetigt werden -> eine Zeile pro Geraet.
@@ -165,7 +168,9 @@ def ensure_schema(conn):
         ")"
     )
 
-    # Auf dem Server verfuegbare oeffentliche Raeume (vom Daemon per Disco befuellt).
+    # Bekannte Raeume: oeffentlich gelistete (Disco des MUC-Dienstes) und die aus den
+    # Lesezeichen des Nutzers (XEP-0402/0048). Private, nicht gelistete Raeume stehen
+    # nur in den Lesezeichen -- die Discovery kennt sie nicht.
     conn.execute(
         "CREATE TABLE IF NOT EXISTS muc_available ("
         "  room_jid TEXT PRIMARY KEY,"
@@ -173,6 +178,7 @@ def ensure_schema(conn):
         "  updated_ts REAL"
         ")"
     )
+    _add_column_if_missing(conn, "muc_available", "source", "source TEXT")  # 'disco' | 'bookmark'
 
     # Web-Push: Geraete-Abos dieses Accounts (vom Web eingetragen, vom Daemon genutzt).
     conn.execute(

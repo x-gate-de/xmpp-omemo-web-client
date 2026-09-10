@@ -121,10 +121,22 @@ Oben rechts auf jeder Kachel (beim Drüberfahren, am Handy dauerhaft):
 
 ## 10. Gruppenräume
 
-- Unter **„Räume"** siehst du öffentliche Gruppenräume; du kannst beitreten, lesen
-  und schreiben.
-- **Achtung:** Gruppenräume sind **unverschlüsselt** (kein OMEMO). Inhalte sind dort
+- Unter **„Räume"** siehst du Gruppenräume aus zwei Quellen: die **öffentlich
+  gelisteten** Räume des Servers und die Räume aus deinen **Lesezeichen** (dort mit
+  „Lesezeichen" gekennzeichnet). Private Räume sind serverseitig nicht auffindbar —
+  sie erscheinen nur, weil dein Chat-Client sie als Lesezeichen gespeichert hat.
+- Fehlt ein privater Raum trotzdem, führt ihn dein Chat‑Client nur lokal (ohne
+  serverseitiges Lesezeichen). Dann oben auf der Raumseite die **Raum‑JID eingeben**
+  (z. B. `raum@conference.example.com`) und direkt beitreten.
+- Beigetreten wird nie automatisch: Du entscheidest per **Beitreten**, ab wann der
+  Archivierer im Raum sitzt und mitschreibt. Die Liste wird alle 30 Minuten
+  aufgefrischt — ein ganz neuer Raum kann also kurz auf sich warten lassen.
+- **Offene Räume sind unverschlüsselt** (kein OMEMO). Inhalte liegen dort
   serverseitig im Klartext.
+- **Verschlüsselte Räume** werden mitgelesen und archiviert, aber du kannst aus der
+  Web‑UI **nicht hineinschreiben** — eine Klartext‑Nachricht in einem verschlüsselten
+  Raum wäre für alle anderen sichtbar unverschlüsselt. Zum Schreiben dort bitte einen
+  Chat‑Client benutzen. Das Eingabefeld ist in solchen Räumen ausgeblendet.
 
 ---
 
