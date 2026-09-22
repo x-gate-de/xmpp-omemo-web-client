@@ -1,10 +1,11 @@
 # -----------------------------------------------------------------------------
 # Skript: src/archive.py
 # Autor: Torben
-# Version: 1.5.0
+# Version: 1.6.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
-# - Schreibseite des Daemons: Archiv, Outbox, Kontakte (Roster) und MUC-Raeume.
+# - Schreibseite des Daemons: Archiv, Outbox, Kontakte (Roster), MUC-Raeume
+#   und deren Teilnehmerlisten.
 # Betriebs- und Wartungshinweise:
 # - Enthaelt entschluesselte private Nachrichten (Schutzbedarf HOCH). Rechte 0600.
 # - Schema in src/schema.py (gemeinsam mit der Web-UI).
@@ -254,6 +255,45 @@ class MessageArchive:
             (jid, jid),
         ).fetchone()
         return row is not None
+
+    # --- Teilnehmer eines Raums (MUC-Presence, XEP-0045) --------------------
+
+    # Traegt einen Teilnehmer ein bzw. aktualisiert ihn. Schluessel ist der Nick --
+    # die echte JID ist in anonymen Raeumen nicht bekannt und taugt nicht als Schluessel.
+    def upsert_occupant(self, room_jid, nick, real_jid, affiliation, role, show, status,
+                        is_self=False):
+        self._conn.execute(
+            "INSERT INTO muc_occupants"
+            "  (room_jid, nick, real_jid, affiliation, role, show, status, is_self, updated_ts)"
+            " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(room_jid, nick) DO UPDATE SET"
+            "  real_jid = excluded.real_jid, affiliation = excluded.affiliation,"
+            "  role = excluded.role, show = excluded.show, status = excluded.status,"
+            # Die Eigen-Kennzeichnung steht nur in der Presence mit Status 110 (meist
+            # nur beim Beitritt). Ein spaeteres Update ohne diesen Code darf sie nicht
+            # wieder loeschen -- der Nick gehoert dann immer noch uns.
+            "  is_self = MAX(muc_occupants.is_self, excluded.is_self),"
+            "  updated_ts = excluded.updated_ts",
+            (room_jid, nick, real_jid or "", affiliation or "", role or "",
+             show or "", status or "", 1 if is_self else 0, time.time()),
+        )
+        self._conn.commit()
+
+    # Teilnehmer hat den Raum verlassen (Presence 'unavailable').
+    def remove_occupant(self, room_jid, nick):
+        self._conn.execute(
+            "DELETE FROM muc_occupants WHERE room_jid = ? AND nick = ?", (room_jid, nick))
+        self._conn.commit()
+
+    # Verwirft die Teilnehmerlisten (room_jid=None: alle). Noetig nach Verbindungs-
+    # verlust: Unsere Praesenz ist serverseitig weg, wir bekommen keine Abmeldungen
+    # mehr mit -- eine stehengebliebene Liste waere schlicht falsch.
+    def clear_occupants(self, room_jid=None):
+        if room_jid:
+            self._conn.execute("DELETE FROM muc_occupants WHERE room_jid = ?", (room_jid,))
+        else:
+            self._conn.execute("DELETE FROM muc_occupants")
+        self._conn.commit()
 
     # Anzeigename fuer Push-Benachrichtigungen (Kontaktname / Raumname / lokaler Teil).
     def display_name(self, jid):

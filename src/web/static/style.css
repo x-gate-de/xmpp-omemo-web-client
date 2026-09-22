@@ -250,6 +250,50 @@ a.list-row:hover {
 .conv-head .name { font-weight: 700; }
 .conv-head .sub { font-size: 0.8rem; color: var(--muted); display: flex; align-items: center; gap: 5px; }
 .conv-head .sub svg { width: 13px; height: 13px; color: var(--accent); }
+/* Teilnehmerliste eines Raums: klappt unter dem Chat-Kopf auf. Zahl im Knopf,
+   damit die Anzahl auch zugeklappt sichtbar bleibt. */
+.conv-occ { gap: 5px; }
+.conv-occ.active { color: var(--fg); border-color: color-mix(in srgb, var(--primary) 55%, var(--border)); }
+.occ-count { font-size: 0.72rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+/* Als Dropdown am Chat-Kopf, nicht im normalen Fluss: Der Verlauf springt beim
+   Oeffnen ans Ende, eine Liste am Dokumentanfang waere schlicht nicht im Bild.
+   Bezugspunkt ist der sticky .conv-head -- die Liste bleibt damit erreichbar,
+   egal wie weit man im Verlauf gescrollt hat. */
+.occupants {
+  position: absolute;
+  top: calc(100% - 6px);
+  right: 0;
+  z-index: 40;
+  width: min(340px, calc(100vw - 32px));
+  max-height: min(60vh, 420px);
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  box-shadow: 0 12px 30px rgb(0 0 0 / .28);
+}
+.occ-head {
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: .08em;
+  color: var(--muted); margin-bottom: 8px;
+}
+.occ-list { display: flex; flex-direction: column; gap: 9px; }
+.occ { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.occ .avatar.sm { width: 28px; height: 28px; font-size: 0.7rem; }
+.occ-main { display: flex; flex-direction: column; min-width: 0; }
+.occ-nick { font-size: 0.86rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.occ-me {
+  margin-left: 5px; padding: 0 5px; border-radius: 999px; font-size: 0.64rem; font-weight: 700;
+  background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
+}
+.occ-sub { font-size: 0.72rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.occ-role {
+  margin-left: auto; flex: none; font-size: 0.64rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+}
+.occ-role.mod { color: var(--accent); }
+.occ-empty { font-size: 0.8rem; color: var(--muted); }
+
 .loadmore { text-align: center; margin-bottom: 12px; }
 .loadmore .btn { font-size: 0.84rem; }
 
@@ -1015,6 +1059,8 @@ a.list-row:hover {
   color: var(--muted); font-size: .74rem; font-weight: 600; letter-spacing: .04em;
 }
 :root[data-design="leitstand"] .conv-chip .avatar { width: 22px; height: 22px; font-size: .62rem; }
+:root[data-design="leitstand"] .occupants { border-radius: 3px; }
+:root[data-design="leitstand"] .occ-me { border-radius: 2px; }
 
 /* Listen: 1px-Raster auf Linienfarbe statt schwebender Karten - die
    Trennlinie IST der durchscheinende Hintergrund (Signatur der Vorlage). */

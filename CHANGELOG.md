@@ -3,6 +3,37 @@
 ## [Unreleased]
 - Optional: MAM backfill to cover daemon downtime.
 
+## [1.13.1] - 2026-09-22
+
+- **The roster button appeared to do nothing.** The list opened in normal document
+  flow right below the conversation header — that is, at the top of the document.
+  A thread jumps to its end when opened, which is where you stand, so the list
+  appeared several screens further up and out of sight. It now hangs off the sticky
+  conversation header and is reachable no matter how far down the thread you are.
+- The dropdown closes on an outside click or Escape and fetches the current state
+  when opened instead of waiting for the next polling tick. The remembered
+  open/closed state is gone — a menu that opens by itself on every page is not one.
+
+## [1.13.0] - 2026-09-22
+
+- **Room roster in group chats.** Who else is reading along in a room was nowhere to
+  be seen — only whoever happened to have written showed up, as a message sender.
+  The daemon now evaluates MUC presence
+  ([XEP-0045](https://xmpp.org/extensions/xep-0045.html)) and keeps the occupants of
+  each room in the new `muc_occupants` table: nick, real JID (where the room is not
+  anonymous), affiliation, role and presence status.
+- The conversation header of a room shows the occupant count on a people button; a
+  click opens the list, moderators first and visitors last. Your own entry is marked
+  "du". It refreshes every 15 seconds.
+- The own entry is recognised from MUC status code 110, not from a nick comparison:
+  the server may rename a client on join (nick conflict, room policy), and a
+  comparison would then mark the wrong person.
+- The list is discarded as soon as it no longer holds — on connection loss, on
+  kick/ban/room destruction (status code 110 in an unavailable presence) and at
+  start-up after a crash. Without our own presence in the room no departures reach
+  the daemon; a frozen list would keep showing people who left long ago. The UI says
+  outright that no roster is available instead of showing a stale one.
+
 ## [1.12.0] - 2026-09-10
 
 - **Private rooms were invisible.** The room list came from the MUC services' service

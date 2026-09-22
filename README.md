@@ -49,6 +49,14 @@ message the moment it arrives and stores it centrally. That is what this project
   not discoverable server-side, so without the bookmarks it is invisible. Rooms only
   a client keeps locally can be added by typing the room JID. Joining is always a
   deliberate click, never automatic — not even for an `autojoin` bookmark.
+- **Room roster**: who is in a room is not something a name tells you, so the
+  conversation header carries a people button with the number of occupants; opening
+  it drops down the list — nick, real JID where the room reveals it, role
+  (moderator/visitor), affiliation and presence status, refreshed every 15 seconds.
+  The daemon builds it from MUC presence
+  ([XEP-0045](https://xmpp.org/extensions/xep-0045.html)) and the list holds only
+  while the daemon is in the room: on disconnect, kick/ban or a restart it is
+  discarded rather than frozen, and the UI says so instead of showing a stale roster.
 - **Encrypted rooms**: OMEMO group messages are decrypted and archived. Sending into
   an encrypted room is refused — cleartext there would lie open on the server and
   show up as unencrypted for everyone else; the composer is hidden in such rooms.

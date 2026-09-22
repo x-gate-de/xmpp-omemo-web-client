@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/daemon.py
 # Autor: Torben
-# Version: 1.9.2
+# Version: 1.10.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Always-Online XMPP-Client: empfaengt/entschluesselt 1:1-OMEMO-Nachrichten,
@@ -12,6 +12,7 @@
 #   Lesezeichen, XEP-0402/0048); beigetretene
 #   Raeume betreten; Carbons aktivieren; eingehende Nachrichten archivieren;
 #   Empfangsbestaetigungen (XEP-0184) samt bestaetigendem Geraet auswerten;
+#   Teilnehmerlisten der Raeume aus der MUC-Presence (XEP-0045) fuehren;
 #   Client-Software der Gegenstellen erkennen (XEP-0115/0092); Outbox abarbeiten.
 # Betriebs- und Wartungshinweise:
 # - Entschluesselung sofort beim Empfang (Forward Secrecy).
@@ -123,6 +124,13 @@ class ArchiverBot(ClientXMPP):
 
         self._config = config
         self._archive = archive
+        # Nach einem Absturz stehen die Teilnehmerlisten des letzten Laufs noch in der
+        # DB, obwohl wir in keinem Raum mehr sind. Sie werden beim Beitritt ohnehin neu
+        # aufgebaut -- bis dahin waeren sie eine Falschaussage.
+        try:
+            archive.clear_occupants()
+        except Exception as e:
+            logger.debug("Teilnehmerlisten nicht geleert: %s", type(e).__name__)
         self._own_bare = self.boundjid.bare
         # Nick fuer Gruppenraeume (Default: lokaler Teil der JID).
         self._muc_nick = xmpp_cfg.get("muc_nick") or self.boundjid.local
@@ -184,6 +192,9 @@ class ArchiverBot(ClientXMPP):
         self.add_event_handler("carbon_received", self._on_carbon_received)
         self.add_event_handler("carbon_sent", self._on_carbon_sent)
         self.add_event_handler("groupchat_message", self._on_groupchat)
+        # Teilnehmer eines Raums: kommen ausschliesslich ueber MUC-Presence herein
+        # (beim Beitritt einmal fuer alle Anwesenden, danach bei jeder Aenderung).
+        self.add_event_handler("groupchat_presence", self._on_muc_presence)
         self.add_event_handler("receipt_received", self._on_receipt)
         # Presence mit Entity Capabilities -> Client der Gegenstelle erkennen.
         self.add_event_handler("entity_caps", self._on_entity_caps)
@@ -235,6 +246,13 @@ class ArchiverBot(ClientXMPP):
         # Der Server lehnt diese still ab (kein Reflex, keine Exception) -> die
         # Nachricht erscheint nie im Raum. Leeren erzwingt den Rejoin nach Reconnect.
         self._joined_rooms.clear()
+        # Aus demselben Grund sind auch die Teilnehmerlisten hinfaellig: Ohne eigene
+        # Praesenz im Raum erreichen uns keine Abmeldungen mehr, die Liste wuerde
+        # einfrieren und dauerhaft Anwesende zeigen, die laengst weg sind.
+        try:
+            self._archive.clear_occupants()
+        except Exception as e:
+            logger.debug("Teilnehmerlisten nicht geleert: %s", type(e).__name__)
         logger.info("Verbindung getrennt -- warte auf Reconnect")
 
     # Roster in die contacts-Tabelle schreiben (Quelle der Userliste in der UI).
@@ -524,6 +542,55 @@ class ArchiverBot(ClientXMPP):
         if self._archive.store(room, direction, body, stanza_id, decrypted=True, sender=nick):
             if direction == "in":
                 asyncio.create_task(self._maybe_push(room, in_room=True))
+
+    # --- Teilnehmer eines Raums (MUC-Presence, XEP-0045) --------------------
+
+    # Fuehrt die Teilnehmerliste eines Raums nach. Der XMPP-Server schickt beim
+    # Beitritt die Presence jedes Anwesenden und danach jede Aenderung -- eine
+    # eigene Abfrage gibt es nicht, die Liste entsteht nur aus diesem Strom.
+    def _on_muc_presence(self, pres):
+        try:
+            room = pres["from"].bare
+            nick = pres["from"].resource
+            if not nick:
+                return
+            muc = pres["muc"]
+            # Status 110 kennzeichnet die Presence, die uns selbst betrifft. Sie ist die
+            # verlaessliche Quelle fuer den eigenen Eintrag -- der Nick allein nicht,
+            # denn der Server kann ihn beim Beitritt aendern (Konflikt, Raumregel).
+            codes = muc["status_codes"] or set()
+            is_self = 110 in codes
+            if pres["type"] == "unavailable":
+                # 303 = Namenswechsel: Nur der alte Nick verschwindet, die Person bleibt
+                # im Raum und meldet sich gleich unter dem neuen Namen wieder an. Das
+                # gilt auch fuer uns selbst -- hier darf nichts geraeumt werden.
+                if 303 in codes:
+                    self._archive.remove_occupant(room, nick)
+                    return
+                # Betrifft die Abmeldung uns selbst, sind wir aus dem Raum raus (Kick,
+                # Ban, Raum aufgeloest). Dann ist die ganze Liste hinfaellig, nicht nur
+                # der eigene Eintrag -- weitere Abmeldungen kommen nicht mehr an.
+                # Der Nick taugt dafuer nicht als Kriterium: Hat der Server uns beim
+                # Beitritt umbenannt, koennte unser konfigurierter Nick einem anderen
+                # Teilnehmer gehoeren, dessen Weggang dann die Liste leeren wuerde.
+                if is_self:
+                    self._joined_rooms.discard(room)
+                    self._archive.clear_occupants(room)
+                else:
+                    self._archive.remove_occupant(room, nick)
+                return
+            # Die echte JID liefert der Server nur in nicht-anonymen Raeumen; in
+            # anonymen bleibt es beim Nick. Fehlt sie, wird nichts erfunden.
+            real = muc["jid"]
+            real_bare = real.bare if real else ""
+            self._archive.upsert_occupant(
+                room, nick, real_bare, muc["affiliation"], muc["role"],
+                pres["show"] or "", pres["status"] or "",
+                # Nick-Vergleich nur als Rueckfall fuer Server, die den Code 110 nicht
+                # mitschicken. Er entscheidet hier nichts als die Markierung "du".
+                is_self=is_self or nick == self._muc_nick)
+        except Exception as e:
+            logger.debug("MUC-Presence nicht auswertbar: %s", type(e).__name__)
 
     # Empfangsbestaetigung (XEP-0184) -> Nachricht als zugestellt markieren.
     async def _on_receipt(self, stanza):

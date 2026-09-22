@@ -1,7 +1,7 @@
 // -----------------------------------------------------------------------------
 // Skript: src/web/static/app.js
 // Autor: Torben
-// Version: 1.12.0
+// Version: 1.13.1
 // Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 // Zweck:
 // - Live-Aktualisierung der Web-UI per Polling (Konversation/Raum + Liste).
@@ -14,6 +14,7 @@
 //   (Auslieferung entschluesselt ueber den /media-Proxy).
 // - Zustellanzeige: zwei Haken oeffnen per Klick die Liste der Geraete, die die
 //   Nachricht quittiert haben (XEP-0184); Nachzuegler werden live nachgetragen.
+// - Teilnehmerliste eines Raums als Dropdown am Chat-Kopf (Polling alle 15 s).
 // Hinweis:
 // - Nutzerinhalte werden ueber textContent eingefuegt (XSS-Schutz). SVG-Icons
 //   stammen aus statischen Markup-Konstanten, nicht aus Nutzerdaten.
@@ -728,6 +729,83 @@
     }
     window.scrollTo(0, document.body.scrollHeight);
     setInterval(pollConversation, 3000);
+
+    // --- Teilnehmer im Raum (MUC-Presence) ---
+    // Die Liste beantwortet die Frage "wer liest hier eigentlich mit" -- in einem
+    // Raum ist das nicht wie im 1:1 aus dem Namen ablesbar.
+    var occBox = document.getElementById("occupants");
+    var occBtn = document.getElementById("occ-btn");
+    if (occBox && occBtn) {
+      var occCount = document.getElementById("occ-count");
+      var occTitle = document.getElementById("occ-title");
+      var occList = document.getElementById("occ-list");
+      var ROLE_LABEL = { moderator: "Moderator", participant: "Teilnehmer", visitor: "Zuhoerer" };
+
+      function occRow(o) {
+        var row = el("div", "occ" + (o.self ? " me" : ""));
+        var av = el("span", "avatar sm", o.initials);
+        av.style.setProperty("--h", o.hue);
+        row.appendChild(av);
+        var main = el("span", "occ-main");
+        var nick = el("span", "occ-nick", o.nick);
+        if (o.self) nick.appendChild(el("span", "occ-me", "du"));
+        main.appendChild(nick);
+        // Zweite Zeile: echte JID, wenn der Raum sie preisgibt -- sonst die Rolle.
+        var parts = [];
+        if (o.jid) parts.push(o.jid); else if (o.role_label) parts.push(o.role_label);
+        if (o.aff_label) parts.push(o.aff_label);
+        if (o.show_label) parts.push(o.show_label);
+        main.appendChild(el("span", "occ-sub", parts.join(" \u00b7 ")));
+        row.appendChild(main);
+        if (o.role === "moderator") row.appendChild(el("span", "occ-role mod", "Mod"));
+        else if (o.role === "visitor") row.appendChild(el("span", "occ-role", ROLE_LABEL.visitor));
+        return row;
+      }
+
+      function renderOcc(items) {
+        occList.textContent = "";
+        items.forEach(function (o) { occList.appendChild(occRow(o)); });
+        if (occCount) occCount.textContent = String(items.length);
+        if (occTitle) occTitle.textContent = items.length + " im Raum";
+        var empty = document.getElementById("occ-empty");
+        if (!items.length && !empty) {
+          empty = el("div", "occ-empty", "Keine Teilnehmerdaten \u2014 der Archivierer ist derzeit nicht im Raum.");
+          empty.id = "occ-empty";
+          occBox.appendChild(empty);
+        } else if (items.length && empty) {
+          empty.parentNode.removeChild(empty);
+        }
+      }
+
+      function pollOccupants() {
+        fetch("/api/occupants/" + encodeURIComponent(convPartner), { credentials: "same-origin" })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (d) { if (d) renderOcc(d.occupants || []); })
+          .catch(function () {});
+      }
+
+      // Dropdown am Chat-Kopf: startet zu und schliesst wie ein Menue -- per Klick
+      // daneben oder Escape. Beim Oeffnen den Stand sofort holen statt bis zum
+      // naechsten Polling-Takt eine veraltete Liste zu zeigen.
+      function setOccOpen(on) {
+        occBox.hidden = !on;
+        occBtn.setAttribute("aria-expanded", on ? "true" : "false");
+        occBtn.classList.toggle("active", on);
+        if (on) pollOccupants();
+      }
+      occBtn.addEventListener("click", function (e) {
+        e.stopPropagation();
+        setOccOpen(occBox.hidden);
+      });
+      occBox.addEventListener("click", function (e) { e.stopPropagation(); });
+      document.addEventListener("click", function () { if (!occBox.hidden) setOccOpen(false); });
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && !occBox.hidden) setOccOpen(false);
+      });
+
+      // Presence-Wechsel sind selten -- 15 s reichen und halten die Last klein.
+      setInterval(pollOccupants, 15000);
+    }
 
     // --- Antworten auf eine bestimmte Nachricht (Zitat) ---
     window.__convName = (document.querySelector(".conv-head .name") || {}).textContent || "";

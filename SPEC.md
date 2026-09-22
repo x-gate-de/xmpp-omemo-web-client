@@ -144,6 +144,15 @@ Logische Komponenten, gekoppelt nur ueber Datenbanken:
 - Aus dem MUC-Archiv (MAM) nachgeladene verschluesselte Nachrichten werden NICHT
   entschluesselt (Forward Secrecy: sie stammen aus der Zeit vor dem Beitritt) und als
   unlesbar abgelegt.
+- **Teilnehmerliste:** Der Daemon fuehrt aus der MUC-Presence (XEP-0045) die
+  Anwesenden je Raum in `muc_occupants` (Nick, echte JID sofern der Raum nicht
+  anonym ist, Affiliation, Rolle, Presence-Status). Der eigene Eintrag ist beim
+  Schreiben markiert (MUC-Statuscode 110). Die Web-UI zeigt die Liste im Chat-Kopf
+  (Zaehler am Knopf, aufklappbar) und aktualisiert sie alle 15 Sekunden.
+  Der Zustand ist fluechtig: Er gilt nur, solange der Daemon im Raum ist. Bei
+  Verbindungsverlust, Kick/Ban und beim Start wird er verworfen statt eingefroren —
+  eine stehengebliebene Liste waere eine Falschaussage. Ist der Daemon nicht im
+  Raum, zeigt die UI das ausdruecklich an.
 - Hinweis: Der Daemon ist als Teilnehmer im Raum praesent (eigener Nick).
 
 ### F12 — Volltextsuche

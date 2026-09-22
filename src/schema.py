@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/schema.py
 # Autor: Torben
-# Version: 1.4.0
+# Version: 1.5.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Zentrales SQLite-Schema fuer Archiv, Outbox, Read-State, Kontakte und MUC.
@@ -179,6 +179,25 @@ def ensure_schema(conn):
         ")"
     )
     _add_column_if_missing(conn, "muc_available", "source", "source TEXT")  # 'disco' | 'bookmark'
+
+    # Teilnehmer der beigetretenen Raeume (MUC-Presence, XEP-0045). Der Zustand ist
+    # fluechtig: Er gilt nur, solange der Daemon im Raum ist -- nach Verbindungsverlust
+    # wird er verworfen, weil unsere Praesenz serverseitig ebenfalls weg ist.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS muc_occupants ("
+        "  room_jid TEXT NOT NULL,"
+        "  nick TEXT NOT NULL,"          # Anzeigename im Raum (Ressourcenteil)
+        "  real_jid TEXT,"               # echte JID; leer in anonymen Raeumen
+        "  affiliation TEXT,"            # owner | admin | member | none | outcast
+        "  role TEXT,"                   # moderator | participant | visitor
+        "  show TEXT,"                   # away | dnd | xa | chat; leer = verfuegbar
+        "  status TEXT,"                 # frei gesetzter Statustext
+        "  is_self INTEGER NOT NULL DEFAULT 0,"  # der eigene Eintrag (MUC-Status 110)
+        "  updated_ts REAL NOT NULL,"
+        "  PRIMARY KEY (room_jid, nick)"
+        ")"
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_occupants_room ON muc_occupants (room_jid)")
 
     # Web-Push: Geraete-Abos dieses Accounts (vom Web eingetragen, vom Daemon genutzt).
     conn.execute(

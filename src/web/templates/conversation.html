@@ -36,6 +36,23 @@
 {%- endif -%}
 {%- endmacro %}
 
+{# Eine Teilnehmerzeile. Rolle und Zugehoerigkeit stehen als Text daneben, weil
+   "Moderator" bzw. "Zuhoerer" die Frage beantwortet, wer hier sprechen darf. #}
+{% macro occupant(o) -%}
+<div class="occ{% if o.self %} me{% endif %}">
+  <span class="avatar sm" style="--h: {{ o.hue }}">{{ o.initials }}</span>
+  <span class="occ-main">
+    <span class="occ-nick">{{ o.nick }}{% if o.self %} <span class="occ-me">du</span>{% endif %}</span>
+    <span class="occ-sub">
+      {%- if o.jid %}{{ o.jid }}{% elif o.role_label %}{{ o.role_label }}{% endif -%}
+      {%- if o.aff_label %} &middot; {{ o.aff_label }}{% endif -%}
+      {%- if o.show_label %} &middot; {{ o.show_label }}{% endif -%}
+    </span>
+  </span>
+  {%- if o.role == 'moderator' %}<span class="occ-role mod">Mod</span>{% elif o.role == 'visitor' %}<span class="occ-role">Zuhoerer</span>{% endif %}
+</div>
+{%- endmacro %}
+
 {% block content %}
 <div class="conv-head">
   <span class="avatar {% if is_room %}room{% endif %}" style="--h: {{ hue }}">{{ initials }}{% if has_avatar %}<img class="av-img" src="/avatar/{{ partner }}?v={{ avatar_ver }}" alt="" loading="lazy">{% endif %}</span>
@@ -50,11 +67,31 @@
       {% endif %}
     </div>
   </span>
+  {% if is_room %}
+  <button class="iconbtn conv-occ" id="occ-btn" type="button" aria-expanded="false"
+          title="Teilnehmer im Raum" aria-label="Teilnehmer im Raum">
+    <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+    <span class="occ-count" id="occ-count">{{ occupants|length }}</span>
+  </button>
+  {% endif %}
   {% if push_enabled %}
   <button class="iconbtn conv-bell" id="push-bell" type="button" data-partner="{{ partner }}"
           title="Push-Benachrichtigungen fuer diesen Chat" aria-label="Push-Benachrichtigungen fuer diesen Chat" aria-pressed="false">
     <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
   </button>
+  {% endif %}
+  {% if is_room %}
+  {# Die Liste kommt aus der MUC-Presence und gilt nur, solange der Daemon im Raum
+     ist. Ist er es nicht, steht hier bewusst nichts statt einer alten Liste. #}
+  <div class="occupants" id="occupants" data-partner="{{ partner }}" hidden>
+    <div class="occ-head"><span id="occ-title">{{ occupants|length }} im Raum</span></div>
+    <div class="occ-list" id="occ-list">
+      {% for o in occupants %}{{ occupant(o) }}{% endfor %}
+    </div>
+    {% if not occupants %}
+    <div class="occ-empty" id="occ-empty">Keine Teilnehmerdaten — der Archivierer ist derzeit nicht im Raum.</div>
+    {% endif %}
+  </div>
   {% endif %}
   {% if not is_room %}
   <a class="iconbtn conv-shield" href="/devices/{{ partner }}" title="Sicherheit / Fingerprints" aria-label="Sicherheit">

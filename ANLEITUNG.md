@@ -131,6 +131,12 @@ Oben rechts auf jeder Kachel (beim Drüberfahren, am Handy dauerhaft):
 - Beigetreten wird nie automatisch: Du entscheidest per **Beitreten**, ab wann der
   Archivierer im Raum sitzt und mitschreibt. Die Liste wird alle 30 Minuten
   aufgefrischt — ein ganz neuer Raum kann also kurz auf sich warten lassen.
+- **Wer ist im Raum?** Im Chat-Kopf steht neben dem Personen-Symbol die Zahl der
+  Anwesenden; ein Klick klappt die Liste auf — mit Nick, echter JID (sofern der Raum
+  sie preisgibt), Rolle (Moderator/Zuhörer) und Presence-Status („abwesend"). Die
+  Liste aktualisiert sich alle 15 Sekunden und zeigt den Stand, den der Archivierer
+  im Raum sieht. Steht dort „Keine Teilnehmerdaten", ist er gerade nicht im Raum
+  (getrennt oder noch nicht beigetreten) — dann ist eine Liste schlicht nicht bekannt.
 - **Offene Räume sind unverschlüsselt** (kein OMEMO). Inhalte liegen dort
   serverseitig im Klartext.
 - **Verschlüsselte Räume** werden mitgelesen und archiviert, aber du kannst aus der

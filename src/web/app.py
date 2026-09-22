@@ -1,7 +1,7 @@
 # -----------------------------------------------------------------------------
 # Skript: src/web/app.py
 # Autor: Torben
-# Version: 2.14.0
+# Version: 2.15.0
 # Lizenz: AGPL-3.0-or-later (siehe LICENSE)
 # Zweck:
 # - Multi-User-Web-UI: Login mit XMPP-Zugangsdaten (gegen den XMPP-Server
@@ -431,6 +431,53 @@ def _is_room(conn, jid):
         (jid, jid),
     ).fetchone()
     return row is not None
+
+
+# Rollen im Raum in der Reihenfolge, in der sie angezeigt werden: Wer moderiert,
+# steht oben; Besucher (stumm geschaltet) unten.
+_ROLE_RANK = {"moderator": 0, "participant": 1, "visitor": 2, "none": 3}
+_ROLE_LABEL = {"moderator": "Moderator", "participant": "Teilnehmer", "visitor": "Zuhoerer"}
+_AFF_LABEL = {"owner": "Eigentuemer", "admin": "Admin", "member": "Mitglied"}
+_SHOW_LABEL = {"away": "abwesend", "xa": "laenger abwesend", "dnd": "beschaeftigt",
+               "chat": "gespraechsbereit"}
+
+
+# Teilnehmer eines Raums (vom Daemon aus der MUC-Presence gefuehrt). Der eigene
+# Eintrag ist bereits beim Schreiben markiert (MUC-Status 110) -- die Web-UI muss
+# den Nick des Archivierers dafuer nicht kennen.
+def _occupants(db_path, room):
+    conn = _open_ro(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT nick, real_jid, affiliation, role, show, status, is_self "
+            "FROM muc_occupants WHERE room_jid = ?", (room,)
+        ).fetchall()
+    except sqlite3.OperationalError:
+        # Aelteres Archiv ohne die Tabelle: lieber leer als ein Fehler in der UI.
+        return []
+    finally:
+        conn.close()
+    items = []
+    for r in rows:
+        role = (r["role"] or "").lower()
+        aff = (r["affiliation"] or "").lower()
+        show = (r["show"] or "").lower()
+        items.append({
+            "nick": r["nick"],
+            "jid": r["real_jid"] or "",
+            "role": role,
+            "role_label": _ROLE_LABEL.get(role, ""),
+            "affiliation": aff,
+            "aff_label": _AFF_LABEL.get(aff, ""),
+            "show": show,
+            "show_label": _SHOW_LABEL.get(show, ""),
+            "status": r["status"] or "",
+            "self": bool(r["is_self"]),
+            "initials": _initials(r["nick"], r["real_jid"] or r["nick"]),
+            "hue": _hue(r["real_jid"] or r["nick"]),
+        })
+    items.sort(key=lambda o: (_ROLE_RANK.get(o["role"], 3), o["nick"].lower()))
+    return items
 
 
 # Trennt fuehrende Zitatzeilen (">") vom eigentlichen Text (Antwort-Funktion).
@@ -1013,6 +1060,9 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
     finally:
         conn.close()
     name = (room_name if is_room else contact_name) or partner
+    # Teilnehmerliste direkt mitrendern: Das Polling holt sie sonst erst Sekunden
+    # spaeter nach, und der Zaehler im Kopf spraenge sichtbar von 0 hoch.
+    occupants = _occupants(db_path, partner) if is_room else []
     # Nur die letzte Seite laden (Robustheit bei sehr langen Verlaeufen wie 'noc').
     messages, has_more = _messages_page(db_path, partner)
     max_id = max((m["id"] for m in messages), default=0)
@@ -1023,7 +1073,7 @@ def conversation(partner: str, acc: dict = Depends(require_account)):
         oldest_ts=(oldest["ts_raw"] if oldest else 0), oldest_id=(oldest["id"] if oldest else 0),
         has_more=has_more, is_room=is_room, initials=_initials(name if name != partner else "", partner),
         hue=_hue(partner), has_avatar=bool(avatar_ver), avatar_ver=avatar_ver,
-        room_encrypted=room_encrypted, nav_active="archiv", account_jid=acc["jid"],
+        room_encrypted=room_encrypted, occupants=occupants, nav_active="archiv", account_jid=acc["jid"],
         account_state=_account_state(acc["jid"]), push_enabled=_PUSH_ENABLED,
     )
 
@@ -1044,6 +1094,19 @@ def api_messages(partner: str, after_id: int = 0, acc: dict = Depends(require_ac
         _mark_read(db_path, partner)
     return {"messages": msgs, "pending": _pending(db_path, partner),
             "delivery": _delivery(db_path, partner)}
+
+
+# Teilnehmer eines Raums fuer die laufende Aktualisierung der Liste im Chat-Kopf.
+@app.get("/api/occupants/{room:path}")
+def api_occupants(room: str, acc: dict = Depends(require_account)):
+    db_path = acc["archive_path"]
+    conn = _open_ro(db_path)
+    try:
+        if not _is_room(conn, room):
+            return {"occupants": []}
+    finally:
+        conn.close()
+    return {"occupants": _occupants(db_path, room)}
 
 
 def _account_domain(jid):
